@@ -1,0 +1,3 @@
+[submodule "systemds-amls-project-data"]
+	path = data
+	url = git@github.com:skogler/systemds-amls-project-data.git
