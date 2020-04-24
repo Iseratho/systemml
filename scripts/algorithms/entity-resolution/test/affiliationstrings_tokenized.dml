@@ -19,11 +19,20 @@
 #
 #-------------------------------------------------------------
 
-hash_blocking = function(Matrix[Double] X, Integer num_blocks) return (Matrix[Double] BLOCKS) {
-  BLOCKS = X %% num_blocks
-}
+# assumes that the file is in the format entity_id,word,count
 
-# split_hash_2 = function(Matrix[Double] X) return (List[Unknown] BLOCKLIST) {
-#   BLOCKS = X %% 2
-#   BLOCKLIST = list(BLOCKS == 1, BLOCKS == 0)
-# }
+source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match
+
+FX = read("./data/affiliationstrings/affiliationstrings_tokens.csv");
+FY = read("./data/affiliationstrings/affiliationstrings_mapping.csv");
+
+jspec = "{recode:[C2]}"
+[X0, MX] = transformencode(target=FX, spec=jspec);
+X = table(X0[,1], X0[,2], X0[,3])
+
+# print(toString(X, rows=10))
+
+SIM = match::cosine(X);
+THRES = match::tresholding(SIM, 0.9);
+
+write(THRES, "/home/iseratho/systemml/data/affiliationstrings/affiliationstrings_res.csv", sparse=TRUE);

@@ -1,0 +1,86 @@
+#-------------------------------------------------------------
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+#-------------------------------------------------------------
+
+source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match
+
+acm = read("./data/DBLP-ACM/ACM.csv");
+dblp = read("./data/DBLP-ACM/DBLP2.csv");
+gt = read("./data/DBLP-ACM/DBLP-ACM_perfectMapping.csv");
+
+acm_class = as.frame(matrix(0, rows=nrow(acm), cols=1))
+dblp_class = as.frame(matrix(1, rows=nrow(dblp), cols=1))
+
+acm = cbind(acm, acm_class)
+dblp = cbind(dblp, dblp_class)
+
+n_acm = nrow(acm)
+n_dblp = nrow(dblp)
+
+# print(toString(acm, rows=2));
+
+comb = rbind(acm, dblp)
+# print(toString(comb, rows=2, cols=2));
+[X0, MX] = transformencode(target=comb, spec="{recode:[C1], dummycode:[C2,C3,C4,C5]}")
+write(MX, "/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_MX.csv")
+
+# print(toString(X0, rows=10, cols=2));
+# print(toString(MX, rows=5));
+
+n_col = ncol(X0)
+
+# X = X0[,2:n]
+# row_norm = sqrt(rowSums(X ^ 2))
+# norm = row_norm %*% t(row_norm)
+# print(ncol(norm))
+# print(nrow(norm))
+# # print(toString(magnitude, rows=10, cols=10));
+# dot = X %*% t(X);
+# print(ncol(dot))
+# print(nrow(dot))
+# COS = dot / norm
+
+# COS = match::cosine(X0[,2:n])
+# SIM = match::slice_relevant(COS, n_acm);
+
+# print(n_acm)
+# print(n_col)
+n_row = n_acm + n_dblp
+
+# only the relevant range between the two datasets
+
+# SIM = COS[n_acm:n_acm+n_dblp,1:n_acm]
+# SIM = match::slice_relevant(COS, n_acm);
+SIM = match::cosine2(X0[1:n_acm,2:n_col], X0[n_acm+1:n_row,2:n_col]);
+# print(toString(SIM, rows=20, cols=20));
+
+# thresholding
+# THRES = (SIM > 0.01) * SIM
+THRES = match::tresholding(SIM, 0.5);
+# print(toString(THRES, rows=20, cols=20));
+
+# convert to sparse via IO
+write(THRES, "/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_temp.csv", data_type="frame", sparse=TRUE);
+mapping = read("/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_temp.csv", data_type="frame")
+# print("length")
+# print(length(mapping))
+# print(toString(mapping, rows=20, cols=20))
+mapped_ids = transformdecode(target=mapping, spec="{recode:[C1]}, meta=M")
+write(THRES, "/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_res.csv", sparse=TRUE);
