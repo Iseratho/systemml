@@ -19,4 +19,7 @@
 #
 #-------------------------------------------------------------
 
-# consider implementing hashing for tokens and sequences
+A = matrix("1 2 3", rows=3, cols=1);;
+pad = matrix(0, rows=2, cols=1);
+B = rbind(A, pad);
+print(toString(B));

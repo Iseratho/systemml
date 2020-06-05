@@ -27,3 +27,7 @@ hash_blocking = function(Matrix[Double] X, Integer num_blocks) return (Matrix[Do
 #   BLOCKS = X %% 2
 #   BLOCKLIST = list(BLOCKS == 1, BLOCKS == 0)
 # }
+
+gen_rand_hyperplanes = function(Integer num_hyperplanes, Integer dimension) return (Matrix[Double] HYP_MATRIX) {
+  HYP_MATRIX = rand(rows=num_hyperplanes, cols=dimension, min=-1, max=1);
+}
