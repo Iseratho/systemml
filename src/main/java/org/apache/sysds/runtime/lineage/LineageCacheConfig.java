@@ -24,15 +24,25 @@ import org.apache.sysds.api.DMLScript;
 import org.apache.sysds.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysds.runtime.instructions.Instruction;
 import org.apache.sysds.runtime.instructions.cp.ComputationCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.DataGenCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.ListIndexingCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.MatrixIndexingCPInstruction;
 
-import java.util.ArrayList;
+import java.util.Comparator;
 
-public class LineageCacheConfig {
-	
-	private static final String[] REUSE_OPCODES = new String[] {
-		"tsmm", "ba+*", "*", "/", "+", "nrow", "ncol",
-		"rightIndex", "leftIndex", "groupedagg", "r'", "solve", "spoof"
+public class LineageCacheConfig 
+{
+	//-------------CACHING LOGIC RELATED CONFIGURATIONS--------------//
+
+	private static final String[] OPCODES = new String[] {
+		"tsmm", "ba+*", "*", "/", "+", "||", "nrow", "ncol", "round", "exp", "log",
+		"rightIndex", "leftIndex", "groupedagg", "r'", "solve", "spoof",
+		"uamean", "max", "min", "ifelse", "-", "sqrt", ">", "uak+", "<=",
+		"^", "uamax", "uark+", "uacmean", "eigen", "ctableexpand", "replace",
+		"^2", "uack+", "tak+*", "uacsqk+", "uark+"
+		//TODO: Reuse everything. 
 	};
+	private static String[] REUSE_OPCODES  = new String[] {};
 	
 	public enum ReuseCacheType {
 		REUSE_FULL,
@@ -54,35 +64,100 @@ public class LineageCacheConfig {
 				|| DMLScript.LINEAGE_REUSE == NONE;
 		}
 	}
+
+	private static ReuseCacheType _cacheType = null;
+	private static CachedItemHead _itemH = null;
+	private static CachedItemTail _itemT = null;
+	private static boolean _compilerAssistedRW = false;
+
+	//-------------DISK SPILLING RELATED CONFIGURATIONS--------------//
+
+	private static boolean _allowSpill = false;
+	// Minimum reliable spilling estimate in milliseconds.
+	public static final double MIN_SPILL_TIME_ESTIMATE = 100;
+	// Minimum reliable data size for spilling estimate in MB.
+	public static final double MIN_SPILL_DATA = 20;
+	// Default I/O in MB per second for binary blocks
+	public static double FSREAD_DENSE = 200;
+	public static double FSREAD_SPARSE = 100;
+	public static double FSWRITE_DENSE = 150;
+	public static double FSWRITE_SPARSE = 75;
 	
-	public enum CachedItemHead {
+	private enum CachedItemHead {
 		TSMM,
 		ALL
 	}
 	
-	public enum CachedItemTail {
+	private enum CachedItemTail {
 		CBIND,
 		RBIND,
 		INDEX,
 		ALL
 	}
-	
-	public ArrayList<String> _MMult = new ArrayList<>();
-	public static boolean _allowSpill = true;
 
-	private static ReuseCacheType _cacheType = null;
-	private static CachedItemHead _itemH = null;
-	private static CachedItemTail _itemT = null;
-	private static boolean _compilerAssistedRW = true;
-	static {
-		//setup static configuration parameters
-		setSpill(false); //disable spilling of cache entries to disk
+	//-------------EVICTION RELATED CONFIGURATIONS--------------//
+
+	private static LineageCachePolicy _cachepolicy = null;
+	// Weights for scoring components (computeTime/size, LRU timestamp)
+	private static double[] WEIGHTS = {0, 1};
+
+	protected enum LineageCacheStatus {
+		EMPTY,     //Placeholder with no data. Cannot be evicted.
+		CACHED,    //General cached data. Can be evicted.
+		SPILLED,   //Data is in disk. Empty value. Cannot be evicted.
+		RELOADED,  //Reloaded from disk. Can be evicted.
+		PINNED,    //Pinned to memory. Cannot be evicted.
+		TOSPILL,   //To be spilled lazily 
+		TODELETE;  //TO be removed lazily
+		public boolean canEvict() {
+			return this == CACHED || this == RELOADED;
+		}
 	}
 	
+	public enum LineageCachePolicy {
+		LRU,
+		WEIGHTED,
+		HYBRID;
+	}
+	
+	protected static Comparator<LineageCacheEntry> LineageCacheComparator = (e1, e2) -> {
+		// Gather the weights for scoring components
+		double w1 = LineageCacheConfig.WEIGHTS[0];
+		double w2 = LineageCacheConfig.WEIGHTS[1];
+		// Generate scores
+		double score1 = w1*(((double)e1._computeTime)/e1.getSize()) + w2*e1.getTimestamp();
+		double score2 = w1*((double)e2._computeTime)/e2.getSize() + w2*e2.getTimestamp();
+		// Generate order. If scores are same, order by LineageItem ID.
+		return score1 == score2 ? Long.compare(e1._key.getId(), e2._key.getId()) : score1 < score2 ? -1 : 1;
+	};
+
+	//----------------------------------------------------------------//
+
+	static {
+		//setup static configuration parameters
+		REUSE_OPCODES = OPCODES;
+		setSpill(true); 
+		setCachePolicy(LineageCachePolicy.HYBRID);
+		setCompAssRW(true);
+	}
+
+	public static void setReusableOpcodes(String... ops) {
+		REUSE_OPCODES = ops;
+	}
+	
+	public static void resetReusableOpcodes() {
+		REUSE_OPCODES = OPCODES;
+	}
+
 	public static boolean isReusable (Instruction inst, ExecutionContext ec) {
-		return inst instanceof ComputationCPInstruction
-			&& (ArrayUtils.contains(REUSE_OPCODES, inst.getOpcode())
-				|| (inst.getOpcode().equals("append") && isVectorAppend(inst, ec)));
+		boolean insttype = inst instanceof ComputationCPInstruction 
+			&& !(inst instanceof ListIndexingCPInstruction);
+		boolean rightop = (ArrayUtils.contains(REUSE_OPCODES, inst.getOpcode())
+			|| (inst.getOpcode().equals("append") && isVectorAppend(inst, ec))
+			|| (inst instanceof DataGenCPInstruction) && ((DataGenCPInstruction) inst).isMatrixCall());
+		boolean updateInplace = (inst instanceof MatrixIndexingCPInstruction)
+			&& ec.getMatrixObject(((ComputationCPInstruction)inst).input1).getUpdateType().isInPlace();
+		return insttype && rightop && !updateInplace;
 	}
 	
 	private static boolean isVectorAppend(Instruction inst, ExecutionContext ec) {
@@ -123,15 +198,6 @@ public class LineageCacheConfig {
 		DMLScript.LINEAGE = true;
 		DMLScript.LINEAGE_REUSE = rop;
 	}
-	
-	public static void setSpill(boolean toSpill) {
-		_allowSpill = toSpill;
-	}
-	
-	public static boolean isSetSpill() {
-		return _allowSpill;
-	}
-
 	public static ReuseCacheType getCacheType() {
 		return _cacheType;
 	}
@@ -151,5 +217,39 @@ public class LineageCacheConfig {
 	
 	public static boolean getCompAssRW() {
 		return _compilerAssistedRW;
+	}
+
+	public static void setCachePolicy(LineageCachePolicy policy) {
+		switch(policy) {
+			case LRU:
+				WEIGHTS[0] = 0; WEIGHTS[1] = 1;
+				break;
+			case WEIGHTED:
+				WEIGHTS[0] = 1; WEIGHTS[1] = 0;
+				break;
+			case HYBRID:
+				WEIGHTS[0] = 1; WEIGHTS[1] = 1;
+				break;
+		}
+		_cachepolicy = policy;
+	}
+
+	public static LineageCachePolicy getCachePolicy() {
+		return _cachepolicy;
+	}
+	
+	public static boolean isLRU() {
+		// Check the LRU component of weights array.
+		return (WEIGHTS[1] == 1);
+	}
+
+	public static void setSpill(boolean toSpill) {
+		_allowSpill = toSpill;
+		// NOTE: _allowSpill only enables/disables disk spilling, but has 
+		// no control over eviction order of cached items.
+	}
+	
+	public static boolean isSetSpill() {
+		return _allowSpill;
 	}
 }

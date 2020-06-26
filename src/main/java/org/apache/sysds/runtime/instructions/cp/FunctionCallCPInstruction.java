@@ -40,6 +40,7 @@ import org.apache.sysds.runtime.io.IOUtilFunctions;
 import org.apache.sysds.runtime.lineage.Lineage;
 import org.apache.sysds.runtime.lineage.LineageCache;
 import org.apache.sysds.runtime.lineage.LineageCacheConfig;
+import org.apache.sysds.runtime.lineage.LineageCacheConfig.ReuseCacheType;
 import org.apache.sysds.runtime.lineage.LineageCacheStatistics;
 import org.apache.sysds.runtime.lineage.LineageItem;
 import org.apache.sysds.runtime.lineage.LineageItemUtils;
@@ -118,7 +119,7 @@ public class FunctionCallCPInstruction extends CPInstruction {
 		// check if function outputs can be reused from cache
 		LineageItem[] liInputs = DMLScript.LINEAGE && LineageCacheConfig.isMultiLevelReuse() ?
 			LineageItemUtils.getLineage(ec, _boundInputs) : null;
-		if( reuseFunctionOutputs(liInputs, fpb, ec) )
+		if (!fpb.isNondeterministic() && reuseFunctionOutputs(liInputs, fpb, ec))
 			return; //only if all the outputs are found in cache
 		
 		// create bindings to formal parameters for given function call
@@ -154,8 +155,11 @@ public class FunctionCallCPInstruction extends CPInstruction {
 			functionVariables.put(currFormalParam.getName(), value);
 			
 			//map lineage to function arguments
-			if( lineage != null )
-				lineage.set(currFormalParam.getName(), ec.getLineageItem(input));
+			if( lineage != null ) {
+				LineageItem litem = ec.getLineageItem(input);
+				lineage.set(currFormalParam.getName(), (litem!=null) ? 
+					litem : ec.getLineage().getOrCreate(input));
+			}
 		}
 		
 		// Pin the input variables so that they do not get deleted 
@@ -172,6 +176,7 @@ public class FunctionCallCPInstruction extends CPInstruction {
 		fn_ec.setVariables(functionVariables);
 		fn_ec.setLineage(lineage);
 		// execute the function block
+		long t0 = !ReuseCacheType.isNone() ? System.nanoTime() : 0;
 		try {
 			fpb._functionName = this._functionName;
 			fpb._namespace = this._namespace;
@@ -184,6 +189,7 @@ public class FunctionCallCPInstruction extends CPInstruction {
 			String fname = DMLProgram.constructFunctionKey(_namespace, _functionName);
 			throw new DMLRuntimeException("error executing function " + fname, e);
 		}
+		long t1 = !ReuseCacheType.isNone() ? System.nanoTime() : 0;
 		
 		// cleanup all returned variables w/o binding 
 		HashSet<String> expectRetVars = new HashSet<>();
@@ -225,9 +231,11 @@ public class FunctionCallCPInstruction extends CPInstruction {
 		}
 
 		//update lineage cache with the functions outputs
-		if( DMLScript.LINEAGE && LineageCacheConfig.isMultiLevelReuse() ) {
-			LineageCache.putValue(fpb.getOutputParams(), 
-				liInputs, getCacheFunctionName(_functionName, fpb), ec);
+		if (DMLScript.LINEAGE && LineageCacheConfig.isMultiLevelReuse() && !fpb.isNondeterministic()) {
+			LineageCache.putValue(fpb.getOutputParams(), liInputs, 
+					getCacheFunctionName(_functionName, fpb), fn_ec, t1-t0);
+			//FIXME: send _boundOutputNames instead of fpb.getOutputParams as 
+			//those are already replaced by boundoutput names in the lineage map.
 		}
 	}
 

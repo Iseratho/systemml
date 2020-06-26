@@ -22,8 +22,11 @@ package org.apache.sysds.parser;
 import java.util.HashMap;
 
 import org.apache.sysds.common.Types.DataType;
+import org.apache.sysds.common.Types.FileFormat;
 import org.apache.sysds.common.Types.ValueType;
 import org.apache.sysds.parser.LanguageException.LanguageErrorCodes;
+import org.apache.sysds.runtime.privacy.PrivacyConstraint;
+import org.apache.sysds.runtime.privacy.PrivacyConstraint.PrivacyLevel;
 
 public abstract class Identifier extends Expression
 {
@@ -33,7 +36,8 @@ public abstract class Identifier extends Expression
 	protected long _dim2;
 	protected int _blocksize;
 	protected long _nnz;
-	protected FormatType _formatType;
+	protected FileFormat _format;
+	protected PrivacyConstraint _privacy;
 
 	public Identifier() {
 		_dim1 = -1;
@@ -43,7 +47,7 @@ public abstract class Identifier extends Expression
 		_blocksize = -1;
 		_nnz = -1;
 		setOutput(this);
-		_formatType = null;
+		_format = null;
 	}
 	
 	public void setProperties(Identifier i) {
@@ -61,7 +65,8 @@ public abstract class Identifier extends Expression
 		}
 		_blocksize = i.getBlocksize();
 		_nnz = i.getNnz();
-		_formatType = i.getFormatType();
+		_format = i.getFileFormat();
+		_privacy = i.getPrivacy();
 	}
 	
 	public void setDimensionValueProperties(Identifier i) {
@@ -87,8 +92,8 @@ public abstract class Identifier extends Expression
 		_valueType = vt;
 	}
 	
-	public void setFormatType(FormatType ft){
-		_formatType = ft;
+	public void setFileFormat(FileFormat ft){
+		_format = ft;
 	}
 	
 	public void setDimensions(long dim1, long dim2){
@@ -98,6 +103,14 @@ public abstract class Identifier extends Expression
 	
 	public void setNnz(long nnzs){
 		_nnz = nnzs;
+	}
+
+	public void setPrivacy(PrivacyLevel privacyLevel){
+		_privacy = new PrivacyConstraint(privacyLevel);
+	}
+
+	public void setPrivacy(PrivacyConstraint privacyConstraint){
+		_privacy = privacyConstraint;
 	}
 	
 	public long getDim1(){
@@ -116,8 +129,8 @@ public abstract class Identifier extends Expression
 		return _valueType;
 	}
 	
-	public FormatType getFormatType(){
-		return _formatType;
+	public FileFormat getFileFormat(){
+		return _format;
 	}
 	
 	public int getBlocksize(){
@@ -130,6 +143,10 @@ public abstract class Identifier extends Expression
 	
 	public long getNnz(){
 		return _nnz;
+	}
+
+	public PrivacyConstraint getPrivacy(){
+		return _privacy;
 	}
 	
 	@Override
@@ -190,7 +207,7 @@ public abstract class Identifier extends Expression
 		_dim2 = 0;
 		_blocksize = 0;
 		_nnz = -1;
-		_formatType = null;
+		_format = null;
 	}
 	
 	public void setIntProperties(){
@@ -200,7 +217,7 @@ public abstract class Identifier extends Expression
 		_dim2 = 0;
 		_blocksize = 0;
 		_nnz = -1;
-		_formatType = null;
+		_format = null;
 	}
 	
 	

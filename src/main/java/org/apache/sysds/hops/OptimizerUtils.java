@@ -51,7 +51,6 @@ import org.apache.sysds.runtime.functionobjects.Modulus;
 import org.apache.sysds.runtime.instructions.cp.Data;
 import org.apache.sysds.runtime.instructions.cp.ScalarObject;
 import org.apache.sysds.runtime.matrix.data.MatrixBlock;
-import org.apache.sysds.runtime.matrix.data.OutputInfo;
 import org.apache.sysds.runtime.meta.DataCharacteristics;
 import org.apache.sysds.runtime.meta.MatrixCharacteristics;
 import org.apache.sysds.runtime.util.IndexRange;
@@ -478,8 +477,12 @@ public class OptimizerUtils
 	}
 
 	public static boolean checkSparseBlockCSRConversion( DataCharacteristics dcIn ) {
-		return Checkpoint.CHECKPOINT_SPARSE_CSR
-			&& OptimizerUtils.getSparsity(dcIn) < MatrixBlock.SPARSITY_TURN_POINT;
+		//we use the non-zero bound to make the important csr decision in 
+		//an best effort manner (the precise non-zeros is irrelevant here)
+		double sp = OptimizerUtils.getSparsity(
+			dcIn.getRows(), dcIn.getCols(), dcIn.getNonZerosBound());
+		return Checkpoint.CHECKPOINT_SPARSE_CSR 
+			&& sp < MatrixBlock.SPARSITY_TURN_POINT;
 	}
 	
 	/**
@@ -739,24 +742,20 @@ public class OptimizerUtils
 		return estimateSizeExactSparsity(0, 0, 0.0d);
 	}
 
-	public static long estimateSizeTextOutput( long rows, long cols, long nnz, OutputInfo oinfo )
-	{
+	public static long estimateSizeTextOutput(long rows, long cols, long nnz, FileFormat fmt) {
 		long bsize = MatrixBlock.estimateSizeOnDisk(rows, cols, nnz);
-		if( oinfo == OutputInfo.TextCellOutputInfo || oinfo == OutputInfo.MatrixMarketOutputInfo )
+		if( fmt.isIJVFormat() )
 			return bsize * 3;
-		else if( oinfo == OutputInfo.LIBSVMOutputInfo )
+		else if( fmt == FileFormat.LIBSVM )
 			return Math.round(bsize * 2.5);
-		else if( oinfo == OutputInfo.CSVOutputInfo )
+		else if( fmt == FileFormat.CSV )
 			return bsize * 2;
-		
-		//unknown output info
 		return bsize;
 	}
 	
-	public static long estimateSizeTextOutput( int[] dims, long nnz, OutputInfo oinfo )
-	{
+	public static long estimateSizeTextOutput(int[] dims, long nnz, FileFormat fmt) {
 		// TODO accurate estimation
-		if( oinfo == OutputInfo.TextCellOutputInfo )
+		if( fmt == FileFormat.TEXT )
 			// nnz * (8 bytes for number + each dimension with an expected String length of 3 and one space)
 			return nnz * (8 + dims.length * 4); // very simple estimation. example:100 100 1.345678
 		throw new DMLRuntimeException("Tensor output format not implemented.");

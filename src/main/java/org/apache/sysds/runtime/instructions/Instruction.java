@@ -27,6 +27,7 @@ import org.apache.sysds.api.DMLScript;
 import org.apache.sysds.lops.Lop;
 import org.apache.sysds.parser.DataIdentifier;
 import org.apache.sysds.runtime.controlprogram.context.ExecutionContext;
+import org.apache.sysds.runtime.privacy.PrivacyConstraint;
 
 public abstract class Instruction 
 {
@@ -56,6 +57,7 @@ public abstract class Instruction
 	public static final String INSTRUCTION_DELIM = Lop.INSTRUCTION_DELIMITOR;
 	public static final String SP_INST_PREFIX = "sp_";
 	public static final String GPU_INST_PREFIX = "gpu_";
+	public static final String FEDERATED_INST_PREFIX = "fed_";
 	
 	//basic instruction meta data
 	protected String instString = null;
@@ -69,6 +71,9 @@ public abstract class Instruction
 	protected int endLine = -1;  
 	protected int beginCol = -1; 
 	protected int endCol = -1;
+
+	//privacy meta data
+	protected PrivacyConstraint privacyConstraint = null;
 	
 	public String getFilename() {
 		return filename;
@@ -129,6 +134,18 @@ public abstract class Instruction
 			this.endCol = oldInst.endCol;
 		}
 	}
+
+	public void setPrivacyConstraint(Lop lop){
+		privacyConstraint = lop.getPrivacyConstraint();
+	}
+
+	public void setPrivacyConstraint(PrivacyConstraint pc){
+		privacyConstraint = pc;
+	}
+
+	public PrivacyConstraint getPrivacyConstraint(){
+		return privacyConstraint;
+	}
 	
 	/**
 	 * Getter for instruction line number
@@ -181,6 +198,8 @@ public abstract class Instruction
 				extendedOpcode = SP_INST_PREFIX + getOpcode();
 			else if( getType() == IType.GPU )
 				extendedOpcode = GPU_INST_PREFIX + getOpcode();
+			else if( getType() == IType.FEDERATED)
+				extendedOpcode = FEDERATED_INST_PREFIX + getOpcode();
 			else
 				extendedOpcode = getOpcode();
 		}

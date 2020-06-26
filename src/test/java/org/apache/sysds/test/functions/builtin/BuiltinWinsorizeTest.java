@@ -35,7 +35,7 @@ public class BuiltinWinsorizeTest extends AutomatedTestBase
 	private final static String TEST_DIR = "functions/builtin/";
 	private static final String TEST_CLASS_DIR = TEST_DIR + BuiltinWinsorizeTest.class.getSimpleName() + "/";
 	
-	private final static double eps = 1e-4;
+	private final static double eps = 1e-3;
 	private final static int rows = 1765;
 	private final static double spDense = 0.99;
 	
@@ -64,12 +64,12 @@ public class BuiltinWinsorizeTest extends AutomatedTestBase
 			
 			String HOME = SCRIPT_DIR + TEST_DIR;
 			fullDMLScriptName = HOME + TEST_NAME + ".dml";
-			programArgs = new String[]{"-explain", "-args", input("A"), output("B") };
+			programArgs = new String[]{"-args", input("A"), output("B") };
 			fullRScriptName = HOME + TEST_NAME + ".R";
 			rCmd = "Rscript" + " " + fullRScriptName + " " + inputDir() + " " + expectedDir();
 			
 			//generate actual dataset 
-			double[][] A = getRandomMatrix(rows, 1, -1, 1, spDense, 7);
+			double[][] A = getRandomMatrix(rows, 10, -1, 1, spDense, 7);
 			writeInputMatrixWithMTD("A", A, true);
 			
 			runTest(true, false, null, -1);

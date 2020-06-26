@@ -26,7 +26,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Stack;
 
+import org.apache.commons.lang3.mutable.MutableInt;
 import org.apache.sysds.hops.Hop;
 import org.apache.sysds.hops.LiteralOp;
 import org.apache.sysds.hops.OptimizerUtils;
@@ -287,18 +289,15 @@ public class Explain
 		return sb.toString();
 	}
 
-	public static String explain( ProgramBlock pb )
-	{
+	public static String explain( ProgramBlock pb ) {
 		return explainProgramBlock(pb, 0);
 	}
 
-	public static String explain( ArrayList<Instruction> inst )
-	{
+	public static String explain( ArrayList<Instruction> inst ) {
 		return explainInstructions(inst, 0);
 	}
 
-	public static String explain( ArrayList<Instruction> inst, int level )
-	{
+	public static String explain( ArrayList<Instruction> inst, int level ) {
 		return explainInstructions(inst, level);
 	}
 
@@ -340,25 +339,25 @@ public class Explain
 
 	public static String explainLineageItems( LineageItem[] lis, int level ) {
 		StringBuilder sb = new StringBuilder();
-		LineageItem.resetVisitStatus(lis);
+		LineageItem.resetVisitStatusNR(lis);
 		for( LineageItem li : lis )
-			sb.append(explainLineageItem(li, level));
-		LineageItem.resetVisitStatus(lis);
+			sb.append(explainLineageItemNR(li, level));
+		LineageItem.resetVisitStatusNR(lis);
 		return sb.toString();
 	}
 
 	public static String explain( LineageItem li ) {
-		li.resetVisitStatus();
+		li.resetVisitStatusNR();
 		String s = explain(li, 0);
 		s += rExplainDedupItems(li, new ArrayList<>());
-		li.resetVisitStatus();
+		li.resetVisitStatusNR();
 		return s;
 	}
 
 	private static String explain( LineageItem li, int level ) {
-		li.resetVisitStatus();
-		String ret = explainLineageItem(li, level);
-		li.resetVisitStatus();
+		li.resetVisitStatusNR();
+		String ret = explainLineageItemNR(li, level);
+		li.resetVisitStatusNR();
 		return ret;
 	}
 	
@@ -598,13 +597,42 @@ public class Explain
 		return sb.toString();
 	}
 
-	/**
-	 * Do a post-order traverse through the Lineage Item DAG and explain each Hop
-	 *
-	 * @param li lineage item
-	 * @param level offset
-	 * @return string explanation of Lineage Item DAG
-	 */
+	private static String explainLineageItemNR(LineageItem item, int level) {
+		//NOTE: in contrast to similar non-recursive functions like resetVisitStatusNR,
+		// we maintain a more complex stack to ensure DFS ordering where current nodes
+		// are added after the subtree underneath is processed (backwards compatibility)
+		Stack<LineageItem> stackItem = new Stack<>();
+		Stack<MutableInt> stackPos = new Stack<>();
+		stackItem.push(item); stackPos.push(new MutableInt(0));
+		StringBuilder sb = new StringBuilder();
+		while( !stackItem.empty() ) {
+			LineageItem tmpItem = stackItem.peek();
+			MutableInt tmpPos = stackPos.peek();
+			//check ascent condition - no item processing
+			if( tmpItem.isVisited() ) {
+				stackItem.pop(); stackPos.pop();
+			}
+			//check ascent condition - append item
+			else if( tmpItem.getInputs() == null 
+				|| tmpItem.getInputs().length <= tmpPos.intValue() ) {
+				sb.append(createOffset(level));
+				sb.append(tmpItem.toString());
+				sb.append('\n');
+				stackItem.pop(); stackPos.pop();
+				tmpItem.setVisited();
+			}
+			//check descent condition
+			else if( tmpItem.getInputs() != null ) {
+				stackItem.push(tmpItem.getInputs()[tmpPos.intValue()]);
+				tmpPos.increment();
+				stackPos.push(new MutableInt(0));
+			}
+		}
+		return sb.toString();
+	}
+	
+	@Deprecated
+	@SuppressWarnings("unused")
 	private static String explainLineageItem(LineageItem li, int level) {
 		if( li.isVisited())
 			return "";
@@ -693,6 +721,8 @@ public class Explain
 			sb.append(explainInstructions(wpb.getPredicate(), level+1));
 			for( ProgramBlock pbc : wpb.getChildBlocks() )
 				sb.append( explainProgramBlock( pbc, level+1) );
+			if( wpb.getExitInstruction() != null )
+				sb.append(explainInstructions(wpb.getExitInstruction(), level+1));
 		}
 		else if (pb instanceof IfProgramBlock) {
 			IfProgramBlock ipb = (IfProgramBlock) pb;
@@ -707,6 +737,8 @@ public class Explain
 				for( ProgramBlock pbc : ipb.getChildBlocksElseBody() )
 					sb.append( explainProgramBlock( pbc, level+1) );
 			}
+			if( ipb.getExitInstruction() != null )
+				sb.append(explainInstructions(ipb.getExitInstruction(), level+1));
 		}
 		else if (pb instanceof ForProgramBlock) { //incl parfor
 			ForProgramBlock fpb = (ForProgramBlock) pb;
@@ -725,7 +757,8 @@ public class Explain
 			sb.append(explainInstructions(fpb.getIncrementInstructions(), level+1));
 			for( ProgramBlock pbc : fpb.getChildBlocks() )
 				sb.append( explainProgramBlock( pbc, level+1) );
-
+			if( fpb.getExitInstruction() != null )
+				sb.append(explainInstructions(fpb.getExitInstruction(), level+1));
 		}
 		else if( pb instanceof BasicProgramBlock ) {
 			BasicProgramBlock bpb = (BasicProgramBlock) pb;
@@ -740,24 +773,27 @@ public class Explain
 		return sb.toString();
 	}
 
-	private static String explainInstructions( ArrayList<Instruction> instSet, int level )
-	{
+	private static String explainInstructions( ArrayList<Instruction> instSet, int level ) {
 		StringBuilder sb = new StringBuilder();
 		String offsetInst = createOffset(level);
-
-		for( Instruction inst : instSet )
-		{
+		for( Instruction inst : instSet ) {
 			String tmp = explainGenericInstruction(inst, level);
-
 			sb.append( offsetInst );
 			sb.append( tmp );
-
 			sb.append( '\n' );
 		}
 
 		return sb.toString();
 	}
 
+	private static String explainInstructions( Instruction inst, int level ) {
+		StringBuilder sb = new StringBuilder();
+		sb.append( createOffset(level) );
+		sb.append( explainGenericInstruction(inst, level) );
+		sb.append( '\n' );
+		return sb.toString();
+	}
+	
 	private static String explainGenericInstruction( Instruction inst, int level )
 	{
 		String tmp = null;

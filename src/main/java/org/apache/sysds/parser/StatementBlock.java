@@ -35,8 +35,8 @@ import org.apache.sysds.hops.rewrite.StatementBlockRewriteRule;
 import org.apache.sysds.lops.Lop;
 import org.apache.sysds.common.Builtins;
 import org.apache.sysds.common.Types.DataType;
+import org.apache.sysds.common.Types.FileFormat;
 import org.apache.sysds.common.Types.ValueType;
-import org.apache.sysds.parser.Expression.FormatType;
 import org.apache.sysds.parser.LanguageException.LanguageErrorCodes;
 import org.apache.sysds.parser.PrintStatement.PRINTTYPE;
 import org.apache.sysds.parser.dml.DmlSyntacticValidator;
@@ -62,6 +62,7 @@ public class StatementBlock extends LiveVariableAnalysis implements ParseInfo
 	private ArrayList<String> _updateInPlaceVars = null;
 	private boolean _requiresRecompile = false;
 	private boolean _splitDag = false;
+	private boolean _nondeterministic = false;
 
 	public StatementBlock() {
 		_ID = getNextSBID();
@@ -83,6 +84,7 @@ public class StatementBlock extends LiveVariableAnalysis implements ParseInfo
 		this();
 		setParseInfo(sb);
 		_dmlProg = sb._dmlProg;
+		_nondeterministic = sb.isNondeterministic();
 	}
 
 	public void setDMLProg(DMLProgram dmlProg){
@@ -194,7 +196,8 @@ public class StatementBlock extends LiveVariableAnalysis implements ParseInfo
 			if (stmt instanceof AssignmentStatement) {
 				AssignmentStatement astmt = (AssignmentStatement)stmt;
 				// for now, ensure that an assignment statement containing a read from csv ends up in own statement block
-				if(astmt.getSource().toString().contains(DataExpression.FORMAT_TYPE + "=" + DataExpression.FORMAT_TYPE_VALUE_CSV) && astmt.getSource().toString().contains("read"))
+				if(astmt.getSource().toString().contains(DataExpression.FORMAT_TYPE + "=" + FileFormat.CSV.toString()) 
+					&& astmt.getSource().toString().contains("read"))
 					return false;
 				if (astmt.controlStatement())
 					return false;
@@ -299,7 +302,8 @@ public class StatementBlock extends LiveVariableAnalysis implements ParseInfo
 					FunctionCallIdentifier fcall = (FunctionCallIdentifier) as.getSource();
 					FunctionStatementBlock fblock2 = prog.getFunctionStatementBlock(fcall.getNamespace(), fcall.getName());
 					ret &= rIsInlineableFunction(fblock2, prog);
-					if( as.getSource().toString().contains(DataExpression.FORMAT_TYPE + "=" + DataExpression.FORMAT_TYPE_VALUE_CSV) && as.getSource().toString().contains("read"))
+					if( as.getSource().toString().contains(DataExpression.FORMAT_TYPE + "=" + FileFormat.CSV.toString())
+						&& as.getSource().toString().contains("read"))
 						return false;
 			
 					if( !ret ) return false;
@@ -1073,61 +1077,46 @@ public class StatementBlock extends LiveVariableAnalysis implements ParseInfo
 						+ " can only be a string with one of following values: binary, text, mm, csv.", false, LanguageErrorCodes.INVALID_PARAMETERS);
 			}
 			String ft = formatTypeExpr.toString();
-			if (ft.equalsIgnoreCase(DataExpression.FORMAT_TYPE_VALUE_BINARY)){
-				s.getIdentifier().setFormatType(FormatType.BINARY);
-			} else if (ft.equalsIgnoreCase(DataExpression.FORMAT_TYPE_VALUE_TEXT)){
-				s.getIdentifier().setFormatType(FormatType.TEXT);
-			} else if (ft.equalsIgnoreCase(DataExpression.FORMAT_TYPE_VALUE_MATRIXMARKET)){
-				s.getIdentifier().setFormatType(FormatType.MM);
-			} else if (ft.equalsIgnoreCase(DataExpression.FORMAT_TYPE_VALUE_CSV)){
-				s.getIdentifier().setFormatType(FormatType.CSV);
-			} else if (ft.equalsIgnoreCase(DataExpression.FORMAT_TYPE_VALUE_LIBSVM)){
-				s.getIdentifier().setFormatType(FormatType.LIBSVM);
-			} else{
+			try {
+				s.getIdentifier().setFileFormat(FileFormat.safeValueOf(ft));
+			}
+			catch(Exception ex) {
 				raiseValidateError("IO statement parameter " + DataExpression.FORMAT_TYPE
-						+ " can only be a string with one of following values: binary, text, mm, csv, libsvm; invalid format: '"+ft+"'.", false, LanguageErrorCodes.INVALID_PARAMETERS);
+					+ " can only be a string with one of following values: binary, text, mm, csv, libsvm, jsonl;"
+					+ " invalid format: '"+ft+"'.", false, LanguageErrorCodes.INVALID_PARAMETERS);
 			}
 		}
 		//case of unspecified format parameter, use default
 		else {
-			s.addExprParam(DataExpression.FORMAT_TYPE, new StringIdentifier(FormatType.TEXT.toString(), s), true);
-			s.getIdentifier().setFormatType(FormatType.TEXT);
+			s.addExprParam(DataExpression.FORMAT_TYPE, new StringIdentifier(FileFormat.TEXT.toString(), s), true);
+			s.getIdentifier().setFileFormat(FileFormat.TEXT);
 		}
 	}
 
 	public void setStatementFormatType(AssignmentStatement s, boolean conditionalValidate)
 	{
-
 		if (!(s.getSource() instanceof DataExpression))
 			return;
 		DataExpression dataExpr = (DataExpression)s.getSource();
 
 		if (dataExpr.getVarParam(DataExpression.FORMAT_TYPE)!= null ){
-
 	 		Expression formatTypeExpr = dataExpr.getVarParam(DataExpression.FORMAT_TYPE);
 			if (!(formatTypeExpr instanceof StringIdentifier)){
 				raiseValidateError("IO statement parameter " + DataExpression.FORMAT_TYPE
-						+ " can only be a string with one of following values: binary, text", conditionalValidate, LanguageErrorCodes.INVALID_PARAMETERS);
+					+ " can only be a string with one of following values: binary, text", conditionalValidate, LanguageErrorCodes.INVALID_PARAMETERS);
 			}
 			String ft = formatTypeExpr.toString();
-			if (ft.equalsIgnoreCase(DataExpression.FORMAT_TYPE_VALUE_BINARY)){
-				s.getTarget().setFormatType(FormatType.BINARY);
-			} else if (ft.equalsIgnoreCase(DataExpression.FORMAT_TYPE_VALUE_TEXT)){
-				s.getTarget().setFormatType(FormatType.TEXT);
-			} else if (ft.equalsIgnoreCase(DataExpression.FORMAT_TYPE_VALUE_MATRIXMARKET)){
-				s.getTarget().setFormatType(FormatType.MM);
-			} else if (ft.equalsIgnoreCase(DataExpression.FORMAT_TYPE_VALUE_CSV)){
-				s.getTarget().setFormatType(FormatType.CSV);
-			} else if (ft.equalsIgnoreCase(DataExpression.FORMAT_TYPE_VALUE_LIBSVM)){
-				s.getTarget().setFormatType(FormatType.LIBSVM);
-			} else{
+			try {
+				s.getTarget().setFileFormat(FileFormat.safeValueOf(ft));
+			}
+			catch(Exception ex) {
 				raiseValidateError("IO statement parameter " + DataExpression.FORMAT_TYPE
-						+ " can only be a string with one of following values: binary, text, mm, csv, libsvm", conditionalValidate, LanguageErrorCodes.INVALID_PARAMETERS);
+					+ " can only be a string with one of following values: binary, text, mm, csv, libsvm", conditionalValidate, LanguageErrorCodes.INVALID_PARAMETERS);
 			}
 		} else {
 			dataExpr.addVarParam(DataExpression.FORMAT_TYPE,
-					new StringIdentifier(FormatType.TEXT.toString(), dataExpr));
-			s.getTarget().setFormatType(FormatType.TEXT);
+				new StringIdentifier(FileFormat.TEXT.toString(), dataExpr));
+			s.getTarget().setFileFormat(FileFormat.TEXT);
 		}
 	}
 
@@ -1345,5 +1334,13 @@ public class StatementBlock extends LiveVariableAnalysis implements ParseInfo
 
 	public void setUpdateInPlaceVars( ArrayList<String> vars ) {
 		_updateInPlaceVars = vars;
+	}
+	
+	public void setNondeterministic(boolean flag) {
+		_nondeterministic = flag;
+	}
+	
+	public boolean isNondeterministic() {
+		return _nondeterministic;
 	}
 }
