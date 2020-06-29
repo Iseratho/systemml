@@ -20,6 +20,7 @@
 #-------------------------------------------------------------
 
 source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match
+source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post
 
 acm = read("./data/DBLP-ACM/ACM.csv");
 dblp = read("./data/DBLP-ACM/DBLP2.csv");
@@ -48,24 +49,43 @@ write(MX, "/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_MX.csv");
 
 n_col = ncol(X0)
 n_row = n_acm + n_dblp
-SIM = match::cosine2(X0[1:n_acm,2:n_col], X0[n_acm+1:n_row,2:n_col]);
+SIM = match::cosine2(X0[n_acm+1:n_row,2:n_col], X0[1:n_acm,2:n_col]);
 
 # thresholding
-THRES = match::tresholding(SIM, 0.1);
+THRES = match::tresholding(SIM, 0.3);
 # print(sum(THRES));
-Z = seq(1,ncol(THRES))
-dec = transformdecode(target=Z, meta=MX[,1], spec="{recode:[C1]}")
-dec = cbind(dec, as.frame(t(THRES)))
 
-print(toString(dec, rows=10))
+print(ncol(THRES));
+print(nrow(THRES));
+print(nrow(dblp));
+print(nrow(acm));
 
-# convert to sparse via IO
-# THRES2 = transformdecode(target=THRES, meta=MX, spec=jspec)
-write(THRES, "/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_temp.csv", data_type="frame", sparse=TRUE);
-mapping = read("/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_temp.csv", data_type="frame");
-# M = table(mapping[,1], mapping[,2], mapping[,3])
-mapped_ids = transformdecode(target=mapping, spec="{recode:[C1]}, meta=M")
-write(THRES, "/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_res.csv", sparse=TRUE);
+
+sparse = post::untable_offset(THRES, row_offset=n_acm, col_offset=0);
+
+dense = table(sparse[,1], sparse[,2])
+print(ncol(dense));
+print(nrow(dense));
+
+
+dec = transformdecode(target=sparse, meta=cbind(MX[,1],MX[,1]), spec="{recode:[C1,C2]}");
+output = cbind(dec, as.frame(sparse[,3]))
+print(toString(output, rows=10));
+write(output, "/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_res.csv", sep=",", sparse=FALSE, format="csv");
+
+# Z = seq(1,nrow(THRES));
+#
+# # dec = cbind(dec, as.frame(t(THRES)));
+#
+# print(toString(dec, rows=10))
+#
+# # convert to sparse via IO
+# # THRES2 = transformdecode(target=THRES, meta=MX, spec=jspec)
+# write(THRES, "/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_temp.csv", data_type="frame", sparse=TRUE);
+# mapping = read("/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_temp.csv", data_type="frame");
+# # M = table(mapping[,1], mapping[,2], mapping[,3])
+# mapped_ids = transformdecode(target=mapping, spec="{recode:[C1]}, meta=M")
+# write(THRES, "/home/iseratho/systemml/data/DBLP-ACM/DBLP-ACM_res.csv", sparse=TRUE);
 
 
 

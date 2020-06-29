@@ -24,6 +24,7 @@
 
 source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match
 source("./scripts/algorithms/entity-resolution/primitives/evaluation.dml") as eval
+source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post
 
 FX = read("./data/affiliationstrings/affiliationstrings_tokens.csv");
 FY = read("./data/affiliationstrings/affiliationstrings_mapping_fixed.csv");
@@ -53,13 +54,15 @@ print("thres: \n" + toString(THRES, rows=10, cols=10));
 
 # MATCH = upper.tri(target=THRES, diag=FALSE, values=FALSE) + lower.tri(target=THRES, diag=FALSE, values=FALSE);
 
-# ignore diagonals, double diag() keeps only diagonal of matrix
-MATCH = (SIM > 0.8) - diag(diag(SIM));
+MATCH = (SIM > 0.8);
 print("match: \n" + toString(MATCH, rows=10, cols=10));
 
-# TODO: decode and write
-MATCH_VALS = MATCH * SIM;
-write(MATCH_VALS, "/home/iseratho/systemml/data/affiliationstrings/affiliationstrings_res.csv", sparse=TRUE);
+# ignore diagonals, double diag() keeps only diagonal of matrix
+MATCH_VALS = MATCH * SIM - diag(diag(SIM));
+sparse = post::untable(MATCH_VALS);
+dec = transformdecode(target=sparse, meta=cbind(MX[,1],MX[,1]), spec="{recode:[C1,C2]}");
+output = cbind(dec, as.frame(sparse[,3]))
+write(output, "/home/iseratho/systemml/data/affiliationstrings/affiliationstrings_res.csv", sep=",", sparse=FALSE, format="csv");
 
 jspecy="{recode:[C1,C2]}";
 MY = cbind(MX[,1],MX[,1]);

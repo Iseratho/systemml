@@ -57,6 +57,10 @@ MX = cbind(MX1, MX2);
 
 n = nrow(X1) * nrow(X2)
 e1_mat = X1 %*% matrix(1, rows=1, cols=nrow(X2));
+print(ncol(e1_mat));
+print(nrow(e1_mat));
+print(toString(e1_mat, rows=10, cols=10));
+print("dskafjk");
 e1_col = matrix(e1_mat, rows=n, cols=1, byrow=TRUE);
 e2_mat = X2 %*% matrix(1, rows=1, cols=nrow(X1));
 e2_col = matrix(e2_mat, rows=n, cols=1, byrow=FALSE);
@@ -70,7 +74,7 @@ comb = cbind(e1_col, e2_col, sim);
 
 # only keep non-zero values
 filtered = removeEmpty(target=comb, margin="rows", select=comb[,3]);
-# print(toString(A, rows=100, cols=3));
+print(toString(filtered, rows=100, cols=3));
 
 jspec_comb = "{recode:[C1, C2]}";
 F_res = transformdecode(target=filtered, spec=jspec_comb, meta=MX);
