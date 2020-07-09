@@ -19,10 +19,16 @@
 #
 #-------------------------------------------------------------
 
-# consider implementing hashing for tokens and sequences
+source("./scripts/algorithms/entity-resolution/primitives/clustering.dml") as cluster;
 
-convert_frame_tokens_to_matrix_bow = function(Frame[Unknown] FX) return (Matrix[Double] X, Frame[String] MX) {
-  jspecx = "{recode:[C1,C2]}";
-  [X0, MX] = transformencode(target=FX, spec=jspecx);
-  X = table(X0[,1], X0[,2], X0[,3]);
-}
+A = read("./scripts/algorithms/entity-resolution/test/graph.ijv");
+print(toString(A, rows=15, cols=15));
+
+C = cluster::connected_components(A);
+print(toString(C, rows=15, cols=15));
+
+
+source("./scripts/algorithms/entity-resolution/primitives/blocking.dml") as block;
+
+naive = block::naive_blocking(A, 3);
+print(toString(naive, rows=7, rows=7));

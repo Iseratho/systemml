@@ -21,6 +21,7 @@
 
 source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match;
 source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post;
+source("./scripts/algorithms/entity-resolution/primitives/preprocessing.dml") as pre;
 
 acm = read("./data/DBLP-ACM/ACM_tokens.csv");
 dblp = read("./data/DBLP-ACM/DBLP2_tokens.csv");
@@ -38,16 +39,14 @@ n_dblp = nrow(dblp);
 FX = rbind(acm, dblp);
 
 # convert_frame_tokens_to_matrix_bow
-jspecx = "{recode:[C1,C2]}";
-[X0, MX] = transformencode(target=FX, spec=jspecx);
-X = table(X0[,1], X0[,2], X0[,3]);
+[X, MX] = pre::convert_frame_tokens_to_matrix_bow(FX);
 
-write(MX, "./systemml/data/DBLP-ACM/DBLP-ACM_MX.csv");
+write(MX, "./data/DBLP-ACM/DBLP-ACM_MX.csv");
 
-n_col = ncol(X0);
+n_col = ncol(X);
 n_row = n_acm + n_dblp;
-SIM = match::cosine2(X0[n_acm+1:n_row,2:n_col], X0[1:n_acm,2:n_col]);
-THRES = match::tresholding(SIM, 0.3);
+SIM = match::cosine2(X[n_acm+1:n_row,2:n_col], X[1:n_acm,2:n_col]);
+THRES = match::tresholding(SIM, 0.9);
 
 sparse = post::untable_offset(THRES, row_offset=n_acm, col_offset=0);
 dense = table(sparse[,1], sparse[,2]);

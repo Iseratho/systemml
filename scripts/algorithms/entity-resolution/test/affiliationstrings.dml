@@ -47,4 +47,4 @@ SIM = match::cosine(X0[,2:n]);
 # SIM = X0[,2:n] %*% t(X0[,2:n]);
 THRES = match::tresholding(SIM, 0.01);
 
-write(THRES, "./systemml/data/affiliationstrings/affiliationstrings_res.csv", sparse=TRUE);
+write(THRES, "./data/affiliationstrings/affiliationstrings_res.csv", sparse=TRUE);

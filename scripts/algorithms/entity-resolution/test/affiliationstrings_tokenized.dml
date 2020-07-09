@@ -25,38 +25,40 @@
 
 source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match;
 source("./scripts/algorithms/entity-resolution/primitives/evaluation.dml") as eval;
+source("./scripts/algorithms/entity-resolution/primitives/clustering.dml") as cluster;
 source("./scripts/algorithms/entity-resolution/primitives/preprocessing.dml") as pre;
 source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post;
 
 FX = read("./data/affiliationstrings/affiliationstrings_tokens.csv");
 FY = read("./data/affiliationstrings/affiliationstrings_mapping_fixed.csv");
 
-# convert_frame_tokens_to_matrix_bow
-jspecx = "{recode:[C1,C2]}";
-[X0, MX] = transformencode(target=FX, spec=jspecx);
-X = table(X0[,1], X0[,2], X0[,3]);
+threshold = 0.9;
 
-write(MX, "./systemml/data/affiliationstrings/affiliationstrings_MX.csv");
+[X, MX] = pre::convert_frame_tokens_to_matrix_bow(FX);
+
+write(MX, "./data/affiliationstrings/affiliationstrings_MX.csv");
 
 SIM = match::cosine(X);
-THRES = match::tresholding(SIM, 0.8);
+THRES = match::tresholding(SIM, threshold);
 
 # avoid duplicates and self similarity
 # TRI = upper.tri(target=THRES, diag=FALSE, values=TRUE);
-# write(TRI, "./systemml/data/affiliationstrings/affiliationstrings_res.csv", sparse=TRUE);
+# write(TRI, "./data/affiliationstrings/affiliationstrings_res.csv", sparse=TRUE);
 
 # eval performance
 
 # MATCH = upper.tri(target=THRES, diag=FALSE, values=FALSE) + lower.tri(target=THRES, diag=FALSE, values=FALSE);
 
-MATCH = (SIM > 0.8);
+MATCH = (SIM > threshold);
+CLUSTER = cluster::connected_components(MATCH);
+#CLUSTER = MATCH;
 
 # ignore diagonals, double diag() keeps only diagonal of matrix
-MATCH_VALS = MATCH * SIM - diag(diag(SIM));
+MATCH_VALS = CLUSTER * SIM - diag(diag(SIM));
 sparse = post::untable(MATCH_VALS);
 dec = transformdecode(target=sparse, meta=cbind(MX[,1],MX[,1]), spec="{recode:[C1,C2]}");
 output = cbind(dec, as.frame(sparse[,3]));
-write(output, "./systemml/data/affiliationstrings/affiliationstrings_res.csv", sep=",", sparse=FALSE, format="csv");
+write(output, "./data/affiliationstrings/affiliationstrings_res.csv", sep=",", sparse=FALSE, format="csv");
 
 jspecy="{recode:[C1,C2]}";
 MY = cbind(MX[,1],MX[,1]);
@@ -65,4 +67,4 @@ Y = as.matrix(FY);
 GT = table(Y0[,1], Y0[,2], 1);
 
 eval::print_eval_stats(MATCH, GT);
-
+eval::print_eval_stats(CLUSTER, GT);

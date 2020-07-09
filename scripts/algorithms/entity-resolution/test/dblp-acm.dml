@@ -55,7 +55,7 @@ dense = table(sparse[,1], sparse[,2]);
 
 dec = transformdecode(target=sparse, meta=cbind(MX[,1],MX[,1]), spec="{recode:[C1,C2]}");
 output = cbind(dec, as.frame(sparse[,3]));
-write(output, "./systemml/data/DBLP-ACM/DBLP-ACM_res.csv", sep=",", sparse=FALSE, format="csv");
+write(output, "./data/DBLP-ACM/DBLP-ACM_res.csv", sep=",", sparse=FALSE, format="csv");
 
 # Z = seq(1,nrow(THRES));
 #
@@ -63,11 +63,11 @@ write(output, "./systemml/data/DBLP-ACM/DBLP-ACM_res.csv", sep=",", sparse=FALSE
 #
 # # convert to sparse via IO
 # # THRES2 = transformdecode(target=THRES, meta=MX, spec=jspec)
-# write(THRES, "./systemml/data/DBLP-ACM/DBLP-ACM_temp.csv", data_type="frame", sparse=TRUE);
-# mapping = read("./systemml/data/DBLP-ACM/DBLP-ACM_temp.csv", data_type="frame");
+# write(THRES, "./data/DBLP-ACM/DBLP-ACM_temp.csv", data_type="frame", sparse=TRUE);
+# mapping = read("./data/DBLP-ACM/DBLP-ACM_temp.csv", data_type="frame");
 # # M = table(mapping[,1], mapping[,2], mapping[,3])
 # mapped_ids = transformdecode(target=mapping, spec="{recode:[C1]}, meta=M")
-# write(THRES, "./systemml/data/DBLP-ACM/DBLP-ACM_res.csv", sparse=TRUE);
+# write(THRES, "./data/DBLP-ACM/DBLP-ACM_res.csv", sparse=TRUE);
 
 
 
