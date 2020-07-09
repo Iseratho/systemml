@@ -26,3 +26,23 @@ convert_frame_tokens_to_matrix_bow = function(Frame[Unknown] FX) return (Matrix[
   [X0, MX] = transformencode(target=FX, spec=jspecx);
   X = table(X0[,1], X0[,2], X0[,3]);
 }
+
+convert_frame_tokens_to_matrix_bow_2 = function(Frame[Unknown] FX, Frame[Unknown] FY) return (Matrix[Double] X, Matrix[Double] Y, Frame[String] M_tokens, Frame[String] MX_ids, Frame[String] MY_ids) {
+  [E_tokens, M_tokens] = transformencode(target=rbind(FX[,2], FY[,2]), spec="{recode:[C1]}");
+  [Y_ids, MY_ids] = transformencode(target=FY[,1], spec="{recode:[C1]}");
+  [X_ids, MX_ids] = transformencode(target=FX[,1], spec="{recode:[C1]}");
+
+  X_tokens = E_tokens[1:nrow(FX),];
+  Y_tokens = E_tokens[nrow(FX):nrow(E_tokens),];
+
+  X = table(X_ids[,1], X_tokens[,1], as.matrix(FX[,3]));
+  Y = table(Y_ids[,1], Y_tokens[,1], as.matrix(FY[,3]));
+  if (ncol(X) < ncol(Y))
+  {
+    X = cbind(X, matrix(0, nrow(X), ncol(Y) - ncol(X)));
+  }
+  else  if (ncol(Y) < ncol(X))
+  {
+    Y = cbind(Y, matrix(0, nrow(Y), ncol(X) - ncol(Y)));
+  }
+}

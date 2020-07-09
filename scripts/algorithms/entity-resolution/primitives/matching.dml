@@ -31,12 +31,18 @@ slice_relevant = function(Matrix[Double] X, Integer begin_second) return (Matrix
   SLICE = X[begin_second:n_row,1:begin_second-1];
 }
 
-cosine2 = function(Matrix[Double] X, Matrix[Double] Y) return (Matrix[Double] COS) {
+cosine2_eps = function(Matrix[Double] X, Matrix[Double] Y, Double epsilon) return (Matrix[Double] COS) {
   X_row_norm = sqrt(rowSums(X ^ 2));
+  X_row_norm = X_row_norm + (X_row_norm < epsilon) * epsilon
   Y_row_norm = sqrt(rowSums(Y ^ 2));
+  Y_row_norm = Y_row_norm + (Y_row_norm < epsilon) * epsilon
   NORM = X_row_norm %*% t(Y_row_norm);
   DOT = X %*% t(Y);
   COS = DOT / NORM;
+}
+
+cosine2 = function(Matrix[Double] X, Matrix[Double] Y) return (Matrix[Double] COS) {
+  COS = cosine2_eps(X, Y, 1e-6)
 }
 
 tresholding = function(Matrix[Double] X, Double threshold) return (Matrix[Double] THRES) {
