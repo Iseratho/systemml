@@ -1,0 +1,7 @@
+
+
+source("./scripts/algorithms/entity-resolution/primitives/clustering.dml") as cluster;
+
+A = read($inFile);
+B = cluster::connected_components(A);
+write(B, $outFile);
