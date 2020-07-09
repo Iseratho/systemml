@@ -19,15 +19,10 @@
 #
 #-------------------------------------------------------------
 
-hash_blocking = function(Matrix[Double] X, Integer num_blocks) return (Matrix[Double] BLOCKS) {
-  BLOCKS = X %% num_blocks;
+entity_clustering_pipeline = function(Matrix[Double] X, Integer begin_second) return (Matrix[Double] SLICE) {
+
 }
 
-# split_hash_2 = function(Matrix[Double] X) return (List[Unknown] BLOCKLIST) {
-#   BLOCKS = X %% 2;
-#   BLOCKLIST = list(BLOCKS == 1, BLOCKS == 0);
-# }
+binary_entity_resolution_pipeline = function(Matrix[Double] X, Integer begin_second) return (Matrix[Double] SLICE) {
 
-gen_rand_hyperplanes = function(Integer num_hyperplanes, Integer dimension) return (Matrix[Double] HYP_MATRIX) {
-  HYP_MATRIX = rand(rows=num_hyperplanes, cols=dimension, min=-1, max=1);
 }

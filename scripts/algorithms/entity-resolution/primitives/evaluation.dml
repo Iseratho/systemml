@@ -62,3 +62,11 @@ f1 = function(Matrix[Double] PRED, Matrix[Double] GT) return (Double score) {
   print("rec: " + recall);
   score = (precision * recall) / (precision + recall);
 }
+
+print_eval_stats = function(Matrix[Double] PRED, Matrix[Double] GT) {
+  print(sum(PRED));
+  acc = accuracy(PRED, GT);
+  print("acc: " + acc);
+  f1 = f1(PRED, GT);
+  print("f1: " + f1);
+}

@@ -19,76 +19,50 @@
 #
 #-------------------------------------------------------------
 
+# Limitation: no tokenizer is available, thus input must already be tokenized
 # assumes that the file is in the format entity_id,word,count
 # also assumes that ids are integers and not strings
 
-source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match
-source("./scripts/algorithms/entity-resolution/primitives/evaluation.dml") as eval
-source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post
+source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match;
+source("./scripts/algorithms/entity-resolution/primitives/evaluation.dml") as eval;
+source("./scripts/algorithms/entity-resolution/primitives/preprocessing.dml") as pre;
+source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post;
 
 FX = read("./data/affiliationstrings/affiliationstrings_tokens.csv");
 FY = read("./data/affiliationstrings/affiliationstrings_mapping_fixed.csv");
 
+# convert_frame_tokens_to_matrix_bow
 jspecx = "{recode:[C1,C2]}";
 [X0, MX] = transformencode(target=FX, spec=jspecx);
 X = table(X0[,1], X0[,2], X0[,3]);
 
-write(MX, "/home/iseratho/systemml/data/affiliationstrings/affiliationstrings_MX.csv");
-
-# print(toString(X, rows=10));
+write(MX, "./systemml/data/affiliationstrings/affiliationstrings_MX.csv");
 
 SIM = match::cosine(X);
-print("sim: \n" + toString(SIM, rows=10, cols=10));
 THRES = match::tresholding(SIM, 0.8);
-print("thres: \n" + toString(THRES, rows=10, cols=10));
 
 # avoid duplicates and self similarity
 # TRI = upper.tri(target=THRES, diag=FALSE, values=TRUE);
-# print(toString(TRI, rows=10, cols=10));
-
-# write(TRI, "/home/iseratho/systemml/data/affiliationstrings/affiliationstrings_res.csv", sparse=TRUE);
-
-
+# write(TRI, "./systemml/data/affiliationstrings/affiliationstrings_res.csv", sparse=TRUE);
 
 # eval performance
 
 # MATCH = upper.tri(target=THRES, diag=FALSE, values=FALSE) + lower.tri(target=THRES, diag=FALSE, values=FALSE);
 
 MATCH = (SIM > 0.8);
-print("match: \n" + toString(MATCH, rows=10, cols=10));
 
 # ignore diagonals, double diag() keeps only diagonal of matrix
 MATCH_VALS = MATCH * SIM - diag(diag(SIM));
 sparse = post::untable(MATCH_VALS);
 dec = transformdecode(target=sparse, meta=cbind(MX[,1],MX[,1]), spec="{recode:[C1,C2]}");
-output = cbind(dec, as.frame(sparse[,3]))
-write(output, "/home/iseratho/systemml/data/affiliationstrings/affiliationstrings_res.csv", sep=",", sparse=FALSE, format="csv");
+output = cbind(dec, as.frame(sparse[,3]));
+write(output, "./systemml/data/affiliationstrings/affiliationstrings_res.csv", sep=",", sparse=FALSE, format="csv");
 
 jspecy="{recode:[C1,C2]}";
 MY = cbind(MX[,1],MX[,1]);
-print(toString(FY, rows=10, cols=10));
-print(toString(MY, rows=10, cols=10));
 Y0 = transformapply(target=FY, spec=jspecy, meta=MY);
-print("Y0");
-print(toString(Y0, rows=10, cols=10));
-
 Y = as.matrix(FY);
-print(toString(Y, rows=10, cols=2));
-print(ncol(Y));
-print(max(rowSums(Y)));
-print(min(rowSums(Y)));
 GT = table(Y0[,1], Y0[,2], 1);
-print(toString(GT, rows=10, cols=10));
 
-# Acc
-print("thres: \n" + toString(THRES, rows=10, cols=10));
-print(sum(MATCH));
-
-acc = eval::accuracy(MATCH, GT);
-print("acc: " + acc);
-
-f1 = eval::f1(MATCH, GT);
-print("f1: " + f1);
-
-# print(toString(HITS, rows=10, cols=10));
+eval::print_eval_stats(MATCH, GT);
 
