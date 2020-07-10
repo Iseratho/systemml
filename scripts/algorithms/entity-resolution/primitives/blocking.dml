@@ -22,7 +22,7 @@
 naive_blocking = function(Matrix[Double] X, Integer num_blocks) return (Matrix[Double] BLOCKS) {
   block_size = ceil(nrow(X) / num_blocks);
   BLOCKS = block_size * seq(1, num_blocks);
-  BLOCKS[num_blocks,] = nrow(X);
+  BLOCKS[num_blocks,] = nrow(X)+1;
   BLOCKS = rbind(as.matrix(1), BLOCKS);
 }
 

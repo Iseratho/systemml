@@ -30,11 +30,13 @@ source("./scripts/algorithms/entity-resolution/primitives/pipeline.dml") as pipe
 
 FX = read("./data/affiliationstrings/affiliationstrings_tokens.csv");
 FY = read("./data/affiliationstrings/affiliationstrings_mapping_fixed.csv");
+X_embeddings = read("./data/affiliationstrings/affiliationstrings_embeddings.csv");
 
 threshold = 0.9;
 num_blocks = 3;
 
 [X, MX] = pre::convert_frame_tokens_to_matrix_bow(FX);
+X = cbind(X, X_embeddings);
 
 write(MX, "./data/affiliationstrings/affiliationstrings_MX.csv");
 
