@@ -33,14 +33,15 @@ FY = read("./data/affiliationstrings/affiliationstrings_mapping_fixed.csv");
 X_embeddings = read("./data/affiliationstrings/affiliationstrings_embeddings.csv");
 
 threshold = 0.9;
-num_blocks = 3;
+num_blocks = 4;
 
 [X, MX] = pre::convert_frame_tokens_to_matrix_bow(FX);
 X = cbind(X, X_embeddings);
 
 write(MX, "./data/affiliationstrings/affiliationstrings_MX.csv");
 
-CLUSTER = pipe::entity_clustering_pipeline_lsh(X, 1, 4, threshold);
+#CLUSTER = pipe::entity_clustering_pipeline(X, num_blocks, threshold);
+CLUSTER = pipe::entity_clustering_pipeline_lsh(X, 3, 4, threshold);
 MATCH = (CLUSTER > 0);
 
 sparse = post::untable(CLUSTER);

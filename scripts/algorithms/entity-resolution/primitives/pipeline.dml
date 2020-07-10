@@ -51,6 +51,7 @@ entity_clustering_pipeline_lsh = function(Matrix[Double] X, Integer num_hashtabl
   # First get the LSH blocks
   for (unused in 1:num_hashtables) {
     [X_index, X_hash, X_sorted] = block::lsh_sorting(X, num_hyperplanes);
+    X_cluster_local = matrix(0, nrow(X), nrow(X));
     ## Perform blocking: match and cluster each block
     # TODO: convert to parfor with check=0
     for (i in 0:2^num_hyperplanes-1) {
@@ -60,16 +61,24 @@ entity_clustering_pipeline_lsh = function(Matrix[Double] X, Integer num_hashtabl
       sub_index = removeEmpty(target=new_index, margin="rows", select=select_vector);
       block_start = as.scalar(sub_index[1,]);
       block_end = as.scalar(sub_index[nrow(sub_index),]);
-      X_block = X_sorted[block_start:block_end,];
-
-      X_sim = match::cosine(X_block);
-      X_thres = match::tresholding(X_sim, threshold);
-      X_match = (X_sim > threshold);
-      X_comp = cluster::connected_components(X_match);
-      X_cluster[block_start:block_end,block_start:block_end] = X_cluster[block_start:block_end,block_start:block_end] | (X_comp * X_sim);
+      if (block_start < block_end) {
+        # Only apply to existing blocks
+        X_block = X_sorted[block_start:block_end,];
+        X_sim = match::cosine(X_block);
+        X_thres = match::tresholding(X_sim, threshold);
+        X_match = (X_sim > threshold);
+        X_comp = cluster::connected_components(X_match);
+        X_new_block = X_cluster_local[block_start:block_end,block_start:block_end] | (X_comp * X_sim);
+        if (sum(X_new_block) > 0) {
+          # Don't write empty blocks
+          #X_cluster[block_start:block_end,block_start:block_end] = rand(rows=block_end-block_start+1, cols=block_end-block_start+1, sparsity=0.05);
+          # TODO: there is a bug that the expression below cannot be written mutliple times
+          X_cluster_local[block_start:block_end,block_start:block_end] = X_new_block;
+        }
+      }
     }
     ## Reindex back the symmetrical matrix
-    X_cluster = block::reindex_rows_and_cols(X_cluster, X_index);
+    X_cluster = X_cluster | block::reindex_rows_and_cols(X_cluster_local, X_index);
   }
 }
 
