@@ -37,7 +37,7 @@ public class EntityResolutionTest extends AutomatedTestBase {
                                                   {1, 1, 0, 0, 0, 0, 0},
                                                   {0, 0, 0, 0, 0, 1, 1},
                                                   {0, 0, 0, 0, 1, 0, 1},
-                                                  {0, 0, 0, 0, 1, 1, 1}};
+                                                  {0, 0, 0, 0, 1, 1, 0}};
 
             double[][] expected = new double[][] {{0, 1, 1, 1, 0, 0, 0},
                                                   {1, 0, 1, 1, 0, 0, 0},

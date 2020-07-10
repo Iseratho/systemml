@@ -31,14 +31,59 @@ dfs = function(Matrix[Double] GRAPH, Integer vertex, Matrix[Double] marked, Matr
   }
 }
 
+dfs_iter = function(Matrix[Double] GRAPH, Integer start_vertex, Matrix[Double] marked, Matrix[Double] id, Integer current_component) return (Matrix[Double] id, Matrix[Double] marked) {
+  nvert =  ncol(GRAPH);
+  stack_idx = matrix(0, rows=nvert, cols=1);
+  stack_vid = matrix(0, rows=nvert, cols=1);
+
+  stack_ptr = 1;
+  stack_vid[stack_ptr,] = start_vertex;
+  stack_idx[stack_ptr,] = 1;
+
+  while(stack_ptr > 0) {
+    vertex = as.scalar(stack_vid[stack_ptr,]);
+    neigh_idx = as.scalar(stack_idx[stack_ptr,]);
+    if (neigh_idx == 1) {
+      id[vertex,] = current_component;
+      marked[vertex,] = 1;
+    }
+    # find next not visited neighbour
+    cont = TRUE;
+    while (cont) {
+        if (as.scalar(GRAPH[vertex, neigh_idx]) & !as.scalar(marked[neigh_idx,])) {
+          cont = FALSE;
+        }
+        else {
+          neigh_idx = neigh_idx + 1;
+          if (neigh_idx > nvert) {
+            cont = FALSE;
+          }
+        }
+    }
+    if (neigh_idx > nvert ) {
+      stack_ptr = stack_ptr - 1;
+    }
+    else if (neigh_idx == nvert & as.scalar(marked[neigh_idx,])) {
+      stack_ptr = stack_ptr - 1;
+    }
+    else {
+      stack_ptr = stack_ptr + 1;
+      stack_vid[stack_ptr,] = neigh_idx;
+      stack_idx[stack_ptr,] = 1;
+    }
+  }
+}
+
+
 connected_components = function(Matrix[Double] ADJACENCY) return (Matrix[Double] COMPONENTS) {
   rows = nrow(ADJACENCY);
   marked = matrix(0, rows=rows, cols=1);
   id = matrix(0, rows=nrow(ADJACENCY), cols=1);
-  count = 0;
+  count = 1;
   for (s in 1:rows) {
     if (!as.scalar(marked[s,])) {
-      [id, marked] = dfs(ADJACENCY, s, marked, id, count);
+      #[id, marked] = dfs(ADJACENCY, s, marked, id, count);
+      [id, marked] = dfs_iter(ADJACENCY, s, marked, id, count);
       count = count + 1;
     }
   }

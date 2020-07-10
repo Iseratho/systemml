@@ -22,7 +22,7 @@
 source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match;
 source("./scripts/algorithms/entity-resolution/primitives/blocking.dml") as block;
 
-FX = read("./data/affiliationstrings/affiliationstrings_ids.csv");
+FX = read("./data/affiliationstrings/affiliationstrings.csv");
 FY = read("./data/affiliationstrings/affiliationstrings_mapping.csv");
 
 jspec = "{recode:[C1],dummycode:[C2]}"
