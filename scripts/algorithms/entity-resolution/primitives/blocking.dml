@@ -26,6 +26,31 @@ naive_blocking = function(Matrix[Double] X, Integer num_blocks) return (Matrix[D
   BLOCKS = rbind(as.matrix(1), BLOCKS);
 }
 
+row_sum_sorting = function(Matrix[Double] X) return (Matrix[Double] X_index, Matrix[Double] X_sorted) {
+  X_rowSum = rowSums(X);
+  X_conc = cbind(X_rowSum, X);
+  X_index = order(target=X_conc, by=1, decreasing = FALSE, index.return=TRUE);
+  X_sorted = order(target=X_conc, by=1, decreasing = FALSE, index.return=FALSE);
+  # Remove rowSums Column from data
+  X_sorted = X_sorted[,2:ncol(X_sorted)];
+}
+
+reindex_rowwise = function(Matrix[Double] X, Matrix[Double] X_index) return (Matrix[Double] X_reindex) {
+  X_conc = cbind(X_index, X);
+  X_reindex = order(target=X_conc, by=1, decreasing = FALSE, index.return=FALSE);
+  # Remove index column
+  X_reindex = X_reindex[,2:ncol(X_reindex)];
+}
+
+reindex_rows_and_cols = function(Matrix[Double] X, Matrix[Double] X_index) return (Matrix[Double] X_reindex) {
+  # First reindex rows
+  X_reindex = X;
+  X_reindex = reindex_rowwise(X_reindex, X_index);
+  # Then transpose and repeat
+  X_reindex = t(X_reindex);
+  X_reindex = reindex_rowwise(X_reindex, X_index);
+}
+
 hash_blocking = function(Matrix[Double] X, Integer num_blocks) return (Matrix[Double] BLOCKS) {
   BLOCKS = X %% num_blocks;
 }

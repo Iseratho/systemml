@@ -19,12 +19,13 @@
 #
 #-------------------------------------------------------------
 
-source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match;
 source("./scripts/algorithms/entity-resolution/primitives/evaluation.dml") as eval;
 source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post;
 source("./scripts/algorithms/entity-resolution/primitives/preprocessing.dml") as pre;
+source("./scripts/algorithms/entity-resolution/primitives/pipeline.dml") as pipe;
 
 threshold = 0.9
+
 acm = read("./data/DBLP-ACM/ACM_tokens.csv");
 dblp = read("./data/DBLP-ACM/DBLP2_tokens.csv");
 
@@ -47,14 +48,9 @@ n_dblp = nrow(dblp);
 [X, Y, M_tokens, MX_ids, MY_ids] = pre::convert_frame_tokens_to_matrix_bow_2(dblp,acm);
 X = cbind(X, dblp_embeddings)
 Y = cbind(Y, acm_embeddings)
-print("X shape:  " +  nrow(X) + "x" + ncol(X))
-print(toString(X, rows=10, cols=10))
-print("Y shape:  " +  nrow(Y) + "x" + ncol(Y))
-print(toString(Y, rows=10, cols=10))
-SIM = match::cosine2(X, Y);
-THRES = match::tresholding(SIM, threshold);
-print(toString(SIM, rows=10, cols=10))
-print("SIM shape:  " +  nrow(SIM) + "x" + ncol(SIM))
+
+THRES = pipe::binary_entity_resolution_pipeline(X, Y, 1, threshold);
+
 sparse = post::untable(THRES);
 #dense = table(sparse[,1], sparse[,2]);
 print(toString(sparse, rows=10, cols=10))
@@ -73,4 +69,4 @@ GT_enc = cbind(
 print(toString(GT_enc, rows=10))
 GT = table(GT_enc[,1], GT_enc[,2], 1);
 
-eval::print_eval_stats((SIM > threshold), GT);
+eval::print_eval_stats((THRES > 0), GT);

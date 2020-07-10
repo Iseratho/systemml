@@ -19,9 +19,11 @@
 #
 #-------------------------------------------------------------
 
-source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match;
 source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post;
 source("./scripts/algorithms/entity-resolution/primitives/preprocessing.dml") as pre;
+source("./scripts/algorithms/entity-resolution/primitives/pipeline.dml") as pipe;
+
+threshold = 0.9
 
 acm = read("./data/DBLP-ACM/ACM_tokens.csv");
 dblp = read("./data/DBLP-ACM/DBLP2_tokens.csv");
@@ -45,8 +47,11 @@ write(MX, "./data/DBLP-ACM/DBLP-ACM_MX.csv");
 
 n_col = ncol(X);
 n_row = n_acm + n_dblp;
-SIM = match::cosine2(X[n_acm+1:n_row,2:n_col], X[1:n_acm,2:n_col]);
-THRES = match::tresholding(SIM, 0.9);
+
+Y = X[1:n_acm,2:n_col]
+X = X[n_acm+1:n_row,2:n_col]
+
+THRES = pipe::binary_entity_resolution_pipeline(X, Y, 1, threshold);
 
 sparse = post::untable_offset(THRES, row_offset=n_acm, col_offset=0);
 dense = table(sparse[,1], sparse[,2]);

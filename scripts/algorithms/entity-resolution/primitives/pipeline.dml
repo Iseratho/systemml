@@ -24,22 +24,31 @@ source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as matc
 source("./scripts/algorithms/entity-resolution/primitives/clustering.dml") as cluster;
 
 entity_clustering_pipeline = function(Matrix[Double] X, Integer num_blocks, Double threshold) return (Matrix[Double] X_cluster) {
-  blocks = block::naive_blocking(X, num_blocks);
-  X_cluster = matrix(0, nrow(X), nrow(X));
+  # First sort the matrix
+  [X_index, X_sorted] = block::row_sum_sorting(X);
+  X = X_sorted;
+  # Perform blocking: match and cluster each block
+  blocks = block::naive_blocking(X_sorted, num_blocks);
+  X_cluster = matrix(0, nrow(X_sorted), nrow(X_sorted));
   # system ds raises false positives for dependency check, but chunks of matrix are indepedantly addresses
   # supress error with check = 0
   parfor (i in 1:nrow(blocks)-1, check = 0) {
     block_start = as.scalar(blocks[i,]);
     block_end = as.scalar(blocks[i+1,])-1;
-    X_block = X[block_start:block_end,];
+    X_block = X_sorted[block_start:block_end,];
     X_sim = match::cosine(X_block);
     X_thres = match::tresholding(X_sim, threshold);
     X_match = (X_sim > threshold);
     X_comp = cluster::connected_components(X_match);
     X_cluster[block_start:block_end,block_start:block_end] = X_comp * X_sim;
   }
+  # Reindex back the symmetrical matrix
+  X_cluster = block::reindex_rows_and_cols(X_cluster, X_index);
 }
 
-#binary_entity_resolution_pipeline = function(Matrix[Double] X, Matrix[Double] Y, Integer num_blocks, Double threshold) return (Matrix[Double] XY_pairs) {
-#
-#}
+binary_entity_resolution_pipeline = function(Matrix[Double] X, Matrix[Double] Y, Integer num_blocks, Double threshold) return (Matrix[Double] XY_pairs) {
+  # TODO: blocking
+  XY_sim = match::cosine2(X, Y);
+  XY_pairs = match::tresholding(XY_sim, threshold);
+  # Clustering is not needed in this case
+}

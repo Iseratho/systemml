@@ -40,7 +40,7 @@ X = cbind(X, X_embeddings);
 
 write(MX, "./data/affiliationstrings/affiliationstrings_MX.csv");
 
-CLUSTER = pipe::entity_clustering_pipeline(X, num_blocks, threshold)
+CLUSTER = pipe::entity_clustering_pipeline(X, num_blocks, threshold);
 MATCH = (CLUSTER > 0);
 
 sparse = post::untable(CLUSTER);
