@@ -26,13 +26,19 @@ naive_blocking = function(Matrix[Double] X, Integer num_blocks) return (Matrix[D
   BLOCKS = rbind(as.matrix(1), BLOCKS);
 }
 
-row_sum_sorting = function(Matrix[Double] X) return (Matrix[Double] X_index, Matrix[Double] X_sorted) {
-  X_rowSum = rowSums(X);
-  X_conc = cbind(X_rowSum, X);
+sort_by_vector = function(Matrix[Double] X, Matrix[Double] v, Boolean remove_v) return (Matrix[Double] X_index, Matrix[Double] X_sorted) {
+  X_conc = cbind(v, X);
   X_index = order(target=X_conc, by=1, decreasing = FALSE, index.return=TRUE);
   X_sorted = order(target=X_conc, by=1, decreasing = FALSE, index.return=FALSE);
-  # Remove rowSums Column from data
-  X_sorted = X_sorted[,2:ncol(X_sorted)];
+  if (remove_v) {
+    # Remove v Column from data
+    X_sorted = X_sorted[,2:ncol(X_sorted)];
+  }
+}
+
+row_sum_sorting = function(Matrix[Double] X) return (Matrix[Double] X_index, Matrix[Double] X_sorted) {
+  X_rowSum = rowSums(X);
+  [X_index, X_sorted] = sort_by_vector(X, X_rowSum, TRUE);
 }
 
 reindex_rowwise = function(Matrix[Double] X, Matrix[Double] X_index) return (Matrix[Double] X_reindex) {
@@ -60,6 +66,27 @@ hash_blocking = function(Matrix[Double] X, Integer num_blocks) return (Matrix[Do
 #   BLOCKLIST = list(BLOCKS == 1, BLOCKS == 0);
 # }
 
-gen_rand_hyperplanes = function(Integer num_hyperplanes, Integer dimension) return (Matrix[Double] HYP_MATRIX) {
-  HYP_MATRIX = rand(rows=num_hyperplanes, cols=dimension, min=-1, max=1);
+gen_rand_hyperplanes = function(Integer num_hyperplanes, Integer dimension) return (Matrix[Double] H) {
+  H = rand(rows=num_hyperplanes, cols=dimension, min=-1, max=1);
+}
+
+lsh = function(Matrix[Double] X, Integer num_hyperplanes) return (Matrix[Double] X_code) {
+  H = gen_rand_hyperplanes(num_hyperplanes, ncol(X));
+  X_hash = X %*% t(H);
+  X_code = (X_hash > 0) - (X_hash < 0);
+}
+
+aggregate_lsh_code = function(Matrix[Double] X_code) return (Matrix[Double] X_agg) {
+  X_pos = (X_code > 0);
+  pos_weights = 2^seq(ncol(X_code)-1, 0);
+  X_weights = X_pos * t(pos_weights);
+  X_agg = rowSums(X_weights);
+}
+
+lsh_sorting = function(Matrix[Double] X, Integer num_hyperplanes) return (Matrix[Double] X_index, Matrix[Double] X_hash, Matrix[Double] X_sorted) {
+  X_code = lsh(X, num_hyperplanes);
+  X_agg = aggregate_lsh_code(X_code);
+  [X_index, X_sorted_with_hash] = sort_by_vector(X, X_agg, FALSE);
+  X_sorted = X_sorted_with_hash[,2:ncol(X_sorted_with_hash)];
+  X_hash = X_sorted_with_hash[,1];
 }

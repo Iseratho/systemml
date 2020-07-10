@@ -46,6 +46,33 @@ entity_clustering_pipeline = function(Matrix[Double] X, Integer num_blocks, Doub
   X_cluster = block::reindex_rows_and_cols(X_cluster, X_index);
 }
 
+entity_clustering_pipeline_lsh = function(Matrix[Double] X, Integer num_hashtables, Integer num_hyperplanes, Double threshold) return (Matrix[Double] X_cluster) {
+  X_cluster = matrix(0, nrow(X), nrow(X));
+  # First get the LSH blocks
+  for (unused in 1:num_hashtables) {
+    [X_index, X_hash, X_sorted] = block::lsh_sorting(X, num_hyperplanes);
+    ## Perform blocking: match and cluster each block
+    # TODO: convert to parfor with check=0
+    for (i in 0:2^num_hyperplanes-1) {
+      # TODO: convert X_hash to blocks and iterate as in entity_clustering_pipeline
+      new_index = seq(1, nrow(X_hash));
+      select_vector = (X_hash == i);
+      sub_index = removeEmpty(target=new_index, margin="rows", select=select_vector);
+      block_start = as.scalar(sub_index[1,]);
+      block_end = as.scalar(sub_index[nrow(sub_index),]);
+      X_block = X_sorted[block_start:block_end,];
+
+      X_sim = match::cosine(X_block);
+      X_thres = match::tresholding(X_sim, threshold);
+      X_match = (X_sim > threshold);
+      X_comp = cluster::connected_components(X_match);
+      X_cluster[block_start:block_end,block_start:block_end] = X_cluster[block_start:block_end,block_start:block_end] | (X_comp * X_sim);
+    }
+    ## Reindex back the symmetrical matrix
+    X_cluster = block::reindex_rows_and_cols(X_cluster, X_index);
+  }
+}
+
 binary_entity_resolution_pipeline = function(Matrix[Double] X, Matrix[Double] Y, Integer num_blocks, Double threshold) return (Matrix[Double] XY_pairs) {
   # TODO: blocking
   XY_sim = match::cosine2(X, Y);
