@@ -217,10 +217,13 @@ public class TestUtils
 
 				readValuesFromFileStreamAndPut(outIn, actualValues);
 			}
-			
+
+			Set<CellIndex> allKeys = new HashSet<>();
+			allKeys.addAll(expectedValues.keySet());
+			allKeys.addAll(actualValues.keySet());
 
 			int countErrors = 0;
-			for (CellIndex index : expectedValues.keySet()) {
+			for (CellIndex index : allKeys) {
 				Double expectedValue = expectedValues.get(index);
 				Double actualValue = actualValues.get(index);
 				if (expectedValue == null)
@@ -346,8 +349,11 @@ public class TestUtils
 
 		readActualAndExpectedFile(null, expectedFile, actualDir, expectedValues, actualValues);
 
+		Set<CellIndex> allKeys = new HashSet<>();
+		allKeys.addAll(expectedValues.keySet());
+		allKeys.addAll(actualValues.keySet());
 		int countErrors = 0;
-		for(CellIndex index : expectedValues.keySet()) {
+		for(CellIndex index : allKeys) {
 			Double expectedValue = (Double) expectedValues.get(index);
 			Double actualValue = (Double) actualValues.get(index);
 			if(expectedValue == null)
@@ -383,8 +389,11 @@ public class TestUtils
 
 		readActualAndExpectedFile(schema, expectedFile, actualDir, expectedValues, actualValues);
 
+		Set<CellIndex> allKeys = new HashSet<>();
+		allKeys.addAll(expectedValues.keySet());
+		allKeys.addAll(actualValues.keySet());
 		int countErrors = 0;
-		for(CellIndex index : expectedValues.keySet()) {
+		for(CellIndex index : allKeys) {
 			Object expectedValue = expectedValues.get(index);
 			Object actualValue = actualValues.get(index);
 
@@ -818,6 +827,12 @@ public class TestUtils
 		compareMatrices(ret1, ret2, m2.getNumRows(), m2.getNumColumns(), tolerance);
 	}
 	
+	public static void compareMatrices(MatrixBlock m1, MatrixBlock m2, double tolerance) {
+		double[][] ret1 = DataConverter.convertToDoubleMatrix(m1);
+		double[][] ret2 = DataConverter.convertToDoubleMatrix(m2);
+		compareMatrices(ret1, ret2, m2.getNumRows(), m2.getNumColumns(), tolerance);
+	}
+	
 	/**
 	 * Compares two matrices given as HashMaps. The matrix containing more nnz
 	 * is iterated and each cell value compared against the corresponding cell
@@ -1101,9 +1116,12 @@ public class TestUtils
 				FSDataInputStream fsout = fs.open(file.getPath());
 				readValuesFromFileStream(fsout, actualValues);
 			}
+			Set<CellIndex> allKeys = new HashSet<>();
+			allKeys.addAll(expectedValues.keySet());
+			allKeys.addAll(actualValues.keySet());
 
 			int countErrors = 0;
-			for (CellIndex index : expectedValues.keySet()) {
+			for (CellIndex index : allKeys) {
 				Double expectedValue = expectedValues.get(index);
 				Double actualValue = actualValues.get(index);
 				if (expectedValue == null)

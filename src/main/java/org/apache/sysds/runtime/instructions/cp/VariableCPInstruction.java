@@ -116,6 +116,7 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 	private final CPOperand output;
 	private final MetaData metadata;
 	private final UpdateType _updateType;
+	private final boolean _containsPreadPrefix;
 	
 	// Frame related members
 	private final String _schema;
@@ -136,6 +137,8 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 		_formatProperties = fprops;
 		_schema = schema;
 		_updateType = utype;
+		_containsPreadPrefix = in1 != null && in1.getName()
+			.contains(org.apache.sysds.lops.Data.PREAD_PREFIX);
 	}
 	
 	private VariableCPInstruction(VariableOperationCode op, CPOperand in1, CPOperand in2, CPOperand in3, CPOperand out,
@@ -535,7 +538,7 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 			
 		case RemoveVariable:
 			for( CPOperand input : inputs )
-				processRemoveVariableInstruction(ec, input.getName());
+				processRmvarInstruction(ec, input.getName());
 			break;
 			
 		case RemoveVariableAndFile:
@@ -594,7 +597,7 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 		//PRE: for robustness we cleanup existing variables, because a setVariable
 		//would  cause a buffer pool memory leak as these objects would never be removed
 		if(ec.containsVariable(getInput1()))
-			processRemoveVariableInstruction(ec, getInput1().getName());
+			processRmvarInstruction(ec, getInput1().getName());
 		
 		switch(getInput1().getDataType()) {
 			case MATRIX: {
@@ -989,7 +992,7 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 	 * @param ec execution context
 	 * @param varname variable name
 	 */
-	public static void processRemoveVariableInstruction( ExecutionContext ec, String varname ) {
+	public static void processRmvarInstruction( ExecutionContext ec, String varname ) {
 		// remove variable from symbol table
 		Data dat = ec.removeVariable(varname);
 		//cleanup matrix data on fs/hdfs (if necessary)
@@ -1126,7 +1129,7 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 		return parseInstruction(sb.toString());
 	}
 	
-	public static Instruction prepareMoveInstruction(String srcVar, String destFileName, String format) {
+	public static Instruction prepMoveInstruction(String srcVar, String destFileName, String format) {
 		StringBuilder sb = new StringBuilder();
 		sb.append("CP");
 		sb.append(Lop.OPERAND_DELIMITOR);
@@ -1141,7 +1144,7 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 		return parseInstruction(str);
 	}
 	
-	public static Instruction prepareMoveInstruction(String srcVar, String destVar) {
+	public static Instruction prepMoveInstruction(String srcVar, String destVar) {
 		// example: mvvar tempA A 
 		StringBuilder sb = new StringBuilder();
 		sb.append("CP");
@@ -1155,7 +1158,7 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 		return parseInstruction(str);
 	}
 	
-	private static String getBasicCreateVarString(String varName, String fileName, boolean fNameOverride, DataType dt, String format) {
+	private static String getBasicCreatevarString(String varName, String fileName, boolean fNameOverride, DataType dt, String format) {
 		//note: the filename override property leads to concatenation of unique ids in order to 
 		//ensure conflicting filenames for objects that originate from the same instruction
 		boolean lfNameOverride = fNameOverride && !ConfigurationManager
@@ -1179,13 +1182,13 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 		return sb.toString();
 	}
 	
-	public static Instruction prepareCreateMatrixVariableInstruction(String varName, String fileName, boolean fNameOverride, String format) {
-		return parseInstruction(getBasicCreateVarString(varName, fileName, fNameOverride, DataType.MATRIX, format));
+	public static Instruction prepCreatevarInstruction(String varName, String fileName, boolean fNameOverride, String format) {
+		return parseInstruction(getBasicCreatevarString(varName, fileName, fNameOverride, DataType.MATRIX, format));
 	}
 
-	public static Instruction prepareCreateVariableInstruction(String varName, String fileName, boolean fNameOverride, DataType dt, String format, DataCharacteristics mc, UpdateType update) {
+	public static Instruction prepCreatevarInstruction(String varName, String fileName, boolean fNameOverride, DataType dt, String format, DataCharacteristics mc, UpdateType update) {
 		StringBuilder sb = new StringBuilder();
-		sb.append(getBasicCreateVarString(varName, fileName, fNameOverride, dt, format));
+		sb.append(getBasicCreatevarString(varName, fileName, fNameOverride, dt, format));
 		
 		sb.append(Lop.OPERAND_DELIMITOR);
 		sb.append(mc.getRows());
@@ -1203,9 +1206,9 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 		return parseInstruction(str);
 	}
 	
-	public static Instruction prepareCreateVariableInstruction(String varName, String fileName, boolean fNameOverride, DataType dt, String format, DataCharacteristics mc, UpdateType update, boolean hasHeader, String delim, boolean sparse) {
+	public static Instruction prepCreatevarInstruction(String varName, String fileName, boolean fNameOverride, DataType dt, String format, DataCharacteristics mc, UpdateType update, boolean hasHeader, String delim, boolean sparse) {
 		StringBuilder sb = new StringBuilder();
-		sb.append(getBasicCreateVarString(varName, fileName, fNameOverride, dt, format));
+		sb.append(getBasicCreatevarString(varName, fileName, fNameOverride, dt, format));
 		
 		sb.append(Lop.OPERAND_DELIMITOR);
 		sb.append(mc.getRows());
@@ -1259,7 +1262,7 @@ public class VariableCPInstruction extends CPInstruction implements LineageTrace
 		LineageItem li = null;
 		switch (getVariableOpcode()) {
 			case CreateVariable:
-				if (!getInput1().getName().contains(org.apache.sysds.lops.Data.PREAD_PREFIX))
+				if (!_containsPreadPrefix)
 					break; //otherwise fall through
 			
 			case Read: {

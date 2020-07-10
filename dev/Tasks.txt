@@ -308,20 +308,21 @@ SYSTEMDS-340 Compiler Assisted Lineage Caching and Reuse
 
 SYSTEMDS-350 Data Cleaning Framework
  * 351 New builtin function for error correction by schema            OK
+ * 352 New builtin function for error correction by length            Ok
 
 SYSTEMDS-360 Privacy/Data Exchange Constraints
  * 361 Initial privacy meta data (compiler/runtime)                   OK
  * 362 Runtime privacy propagation
  * 363 Compile-time privacy propagation
- * 364 Error handling violated privacy constraints
- * 365 Extended privacy/data exchange constraints
+ * 364 Error handling violated privacy constraints                    OK
+ * 365 Extended privacy/data exchange constraints                     OK
 
 SYSTEMDS-370 Lossy Compression Blocks
- * 361 ColGroup Quantization
- * 362 ColGroup Base Data change (from Double to ??)
+ * 371 ColGroup Quantization
+ * 372 ColGroup Base Data change (from Double to ??)
 
 SYSTEMDS-380 Memory Footprint
- * 371 Matrix Block Memory footprint update
+ * 381 Matrix Block Memory footprint update
 
 SYSTEMDS-390 New Builtin Functions IV
  * 391 New GLM builtin function (from algorithms)                     OK
@@ -340,6 +341,11 @@ SYSTEMDS-410 Lineage Tracing, Reuse and Integration II
  * 412 Robust lineage tracing (non-recursive, parfor)                 OK
  * 413 Cache and reuse MultiReturnBuiltin instructions                OK
  * 414 New rewrite for PCA --> lmDS pipeline                          OK
+ * 415 MLContext lineage support (tracing and reuse correctness)      OK
+ * 416 Lineage deduplication while, nested if, loop sequences         OK
+ * 417 New rewrite for partial reuse in StepLM                        OK
+ * 418 Performance lineage tracing and reuse probing small data       OK
+ * 419 Performance and robustness partial rewrites                   
 
 SYSTEMDS-420 Compiler Improvements
  * 421 Fix invalid IPA scalar propagation into functions              OK
@@ -352,3 +358,10 @@ Others:
 
 SYSTEMDS-510 IO formats
  * 511 Add protobuf support to write and read FrameBlocks to HDFS     OK
+
+SYSTEMDS-520 Lineage Tracing, Reuse and Integration III
+ * 521 New lineage option exposing cache policies                     OK
+
+SYSTEMDS-610 Cleaning Pipelines
+ * 611 Initial Brute force execution                                  OK
+
