@@ -24,7 +24,7 @@ source("./scripts/algorithms/entity-resolution/primitives/clustering.dml") as cl
 A = read("./scripts/algorithms/entity-resolution/test/graph.ijv");
 print(toString(A, rows=15, cols=15));
 
-C = cluster::connected_components(A);
+C = cluster::cluster_by_connected_components(A);
 print(toString(C, rows=15, cols=15));
 
 

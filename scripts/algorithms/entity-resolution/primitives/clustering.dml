@@ -75,7 +75,7 @@ dfs_iter = function(Matrix[Double] GRAPH, Integer start_vertex, Matrix[Double] m
 }
 
 
-connected_components = function(Matrix[Double] ADJACENCY) return (Matrix[Double] COMPONENTS) {
+cluster_by_connected_components = function(Matrix[Double] ADJACENCY) return (Matrix[Double] COMPONENTS) {
   rows = nrow(ADJACENCY);
   marked = matrix(0, rows=rows, cols=1);
   id = matrix(0, rows=nrow(ADJACENCY), cols=1);

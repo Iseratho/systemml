@@ -39,7 +39,7 @@ entity_clustering_pipeline = function(Matrix[Double] X, Integer num_blocks, Doub
     X_sim = match::cosine(X_block);
     X_thres = match::tresholding(X_sim, threshold);
     X_match = (X_sim > threshold);
-    X_comp = cluster::connected_components(X_match);
+    X_comp = cluster::cluster_by_connected_components(X_match);
     X_cluster[block_start:block_end,block_start:block_end] = X_comp * X_sim;
   }
   # Reindex back the symmetrical matrix
@@ -67,7 +67,7 @@ entity_clustering_pipeline_lsh = function(Matrix[Double] X, Integer num_hashtabl
         X_sim = match::cosine(X_block);
         X_thres = match::tresholding(X_sim, threshold);
         X_match = (X_sim > threshold);
-        X_comp = cluster::connected_components(X_match);
+        X_comp = cluster::cluster_by_connected_components(X_match);
         X_new_block = X_cluster_local[block_start:block_end,block_start:block_end] | (X_comp * X_sim);
         if (sum(X_new_block) > 0) {
           # Don't write empty blocks
