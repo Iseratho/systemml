@@ -18,3 +18,61 @@
 # under the License.
 #
 #-------------------------------------------------------------
+
+source("./scripts/algorithms/entity-resolution/primitives/preprocessing.dml") as pre;
+source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post;
+source("./scripts/algorithms/entity-resolution/primitives/pipeline.dml") as pipe;
+
+# Command Line Arguments
+fileFX = $FX;
+fileOUT = $OUT;
+
+threshold = ifdef($threshold, 0.9);
+num_blocks = ifdef($num_blocks, 1);
+use_tokens = ifdef($use_tokens, TRUE);
+use_embeddings = ifdef($use_embeddings, FALSE);
+# mapping file is required for evaluation
+store_mapping = ifdef($store_mapping, TRUE);
+fileMX = ifdef($MX, "");
+# file XE is only required if using embeddings
+fileXE = ifdef($XE, "");
+
+# Read data
+FX = read(fileFX);
+if (use_embeddings) {
+  if (fileXE == "") {
+    print("You need to specify file XE when use_embeddings is set to TRUE");
+  } else {
+    X_embeddings = read(fileXE);
+  }
+}
+
+# Convert data
+[X, MX] = pre::convert_frame_tokens_to_matrix_bow(FX);
+if (use_tokens & use_embeddings) {
+  X = cbind(X, X_embeddings);
+} else if (use_tokens) {
+  # Nothing to do in this case, since X already contains tokens
+} else if (use_embeddings) {
+  X = X_embeddings;
+} else {
+  print("Either use_tokens or use_embeddings needs to be TRUE, using tokens only as default.");
+}
+
+if (store_mapping) {
+  if (fileMX == "") {
+    print("You need to specify file MX when store_mapping is set to TRUE.");
+  } else {
+    write(MX, fileMX);
+  }
+}
+
+# Perform clustering
+CLUSTER = pipe::entity_clustering_pipeline_lsh(X, 3, 4, threshold);
+MATCH = (CLUSTER > 0);
+
+# Write results
+sparse = post::untable(CLUSTER);
+dec = transformdecode(target=sparse, meta=cbind(MX[,1],MX[,1]), spec="{recode:[C1,C2]}");
+output = cbind(dec, as.frame(sparse[,3]));
+write(output, fileOUT, sep=",", sparse=FALSE, format="csv");

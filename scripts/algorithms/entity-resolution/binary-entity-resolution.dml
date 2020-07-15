@@ -18,3 +18,58 @@
 # under the License.
 #
 #-------------------------------------------------------------
+
+source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post;
+source("./scripts/algorithms/entity-resolution/primitives/preprocessing.dml") as pre;
+source("./scripts/algorithms/entity-resolution/primitives/pipeline.dml") as pipe;
+
+# Command Line Arguments
+fileFX = $FX;
+fileFY = $FY;
+fileOUT = $OUT;
+
+threshold = ifdef($threshold, 0.9);
+use_tokens = ifdef($use_tokens, TRUE);
+use_embeddings = ifdef($use_embeddings, FALSE);
+# file XE and YE is only required if using embeddings
+fileXE = ifdef($XE, "");
+fileYE = ifdef($YE, "");
+
+# Read data
+FX = read(fileFX);
+FY = read(fileFY);
+if (use_embeddings) {
+  if (fileXE == "" | fileYE == "") {
+    print("You need to specify file XE and XY when use_embeddings is set to TRUE");
+  } else {
+    X_embeddings = read(fileXE);
+    Y_embeddings = read(fileYE);
+  }
+}
+
+# Convert data
+[X, Y, M_tokens, MX_ids, MY_ids] = pre::convert_frame_tokens_to_matrix_bow_2(FX,FY);
+if (use_tokens & use_embeddings) {
+  X = cbind(X, X_embeddings);
+  Y = cbind(Y, Y_embeddings);
+} else if (use_tokens) {
+  # Nothing to do in this case, since X already contains tokens
+} else if (use_embeddings) {
+  X = X_embeddings;
+  Y = Y_embeddings;
+} else {
+  print("Either use_tokens or use_embeddings needs to be TRUE, using tokens only as default.");
+}
+
+# Perform matching
+THRES = pipe::binary_entity_resolution_pipeline(X, Y, 1, threshold);
+
+sparse = post::untable(THRES);
+print(toString(sparse, rows=10, cols=10))
+
+# Write results
+X_dec = transformdecode(target=sparse[,1], meta=MX_ids[,1], spec="{recode:[C1]}");
+Y_dec = transformdecode(target=sparse[,2], meta=MY_ids[,1], spec="{recode:[C1]}");
+output = cbind(cbind(X_dec, Y_dec), as.frame(sparse[,3]));
+print(toString(output, rows=10));
+write(output, fileOUT, sep=",", sparse=FALSE, format="csv");
