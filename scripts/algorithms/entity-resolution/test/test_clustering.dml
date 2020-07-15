@@ -22,13 +22,14 @@
 source("./scripts/algorithms/entity-resolution/primitives/clustering.dml") as cluster;
 
 A = read("./scripts/algorithms/entity-resolution/test/graph.ijv");
-print(toString(A, rows=15, cols=15));
-
-C = cluster::cluster_by_connected_components(A);
-print(toString(C, rows=15, cols=15));
+#print(toString(A, rows=15, cols=15));
+#
+#C = cluster::cluster_by_connected_components(A);
+#print(toString(C, rows=15, cols=15));
 
 
 source("./scripts/algorithms/entity-resolution/primitives/blocking.dml") as block;
 
-naive = block::naive_blocking(A, 3);
-print(toString(naive, rows=7, rows=7));
+print("nrow(A) = %d", nrow(A))
+naive = block::naive(A, 12351);
+print(toString(naive));

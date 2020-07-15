@@ -11,19 +11,19 @@ import java.util.Arrays;
 import java.util.Collection;
 
 @RunWith(value = Parameterized.class)
-public class EntityResolutionTest extends AutomatedTestBase {
+public class EntityResolutionClusteringTest extends AutomatedTestBase {
     private final static String TEST_NAME = "EntityResolution";
     private final static String TEST_DIR = "applications/entity_resolution/";
-    private static final String TEST_CLASS_DIR = TEST_DIR + EntityResolutionTest.class.getSimpleName() + "/";
+    private static final String TEST_CLASS_DIR = TEST_DIR + EntityResolutionClusteringTest.class.getSimpleName() + "/";
     private final double[][] adjacencyMatrix;
     private final double[][] expectedMatrix;
 
     @Override
     public void setUp() {
-        addTestConfiguration(TEST_NAME, new TestConfiguration(TEST_CLASS_DIR, "Clustering", new String[]{"B"}));
+        addTestConfiguration(TEST_NAME, new TestConfiguration(TEST_CLASS_DIR, "cluster_by_connected_components", new String[]{"B"}));
     }
 
-    public EntityResolutionTest(double[][] adjacencyMatrix, double[][] expectedMatrix) {
+    public EntityResolutionClusteringTest(double[][] adjacencyMatrix, double[][] expectedMatrix) {
         this.adjacencyMatrix = adjacencyMatrix;
         this.expectedMatrix = expectedMatrix;
     }
@@ -154,15 +154,14 @@ public class EntityResolutionTest extends AutomatedTestBase {
     }
 
     @Test
-    public void testClusteringNormal() {
+    public void testClusterByConnectedComponent() {
         Types.ExecMode platformOld = Types.ExecMode.HYBRID;
         disableOutAndExpectedDeletion();
 
         try {
-            loadTestConfiguration(getTestConfiguration(TEST_NAME));
-
-            String HOME = SCRIPT_DIR + TEST_DIR;
-            fullDMLScriptName = HOME + "Clustering" + ".dml";
+            TestConfiguration config = getTestConfiguration(TEST_NAME);
+            loadTestConfiguration(config);
+            fullDMLScriptName = SCRIPT_DIR + TEST_DIR + config.getTestScript() + ".dml";
 
             programArgs = new String[]{"-nvargs",
                     "inFile=" + input("A"), "outFile=" + output("B")

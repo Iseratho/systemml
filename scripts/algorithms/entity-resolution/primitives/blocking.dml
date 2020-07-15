@@ -19,28 +19,95 @@
 #
 #-------------------------------------------------------------
 
-naive_blocking = function(Matrix[Double] X, Integer num_blocks) return (Matrix[Double] BLOCKS) {
-  block_size = ceil(nrow(X) / num_blocks);
-  BLOCKS = block_size * seq(1, num_blocks);
-  BLOCKS[num_blocks,] = nrow(X)+1;
-  BLOCKS = rbind(as.matrix(1), BLOCKS);
+# Splits the rows of X into num_blocks non-overlapping regions.
+# May produce less than num_blocks regions.
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X             matrix  ---       A dataset with rows to split into blocks.
+# num_blocks    Integer ---       How many blocks to produce.
+#
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# BLOCKS         Double   A column vector with start indices for each block. Has one more rows
+#                         than blocks such that the last row is the end index of the last block.
+# --------------------------------------------------------------------------------------------
+naive = function(Matrix[Double] X, Integer num_blocks) return (Matrix[Double] BLOCKS) {
+  block_size_flt = nrow(X) / num_blocks;
+  if (block_size_flt < 1.0) {
+    BLOCKS= seq(1, nrow(X) + 1);
+  } else {
+    block_size = ceil(block_size_flt);
+    BLOCKS = rbind(as.matrix(1), 1 +  block_size * seq(1, num_blocks));
+    BLOCKS[num_blocks+1,] = nrow(X) + 1
+  }
 }
 
-sort_by_vector = function(Matrix[Double] X, Matrix[Double] v, Boolean remove_v) return (Matrix[Double] X_index, Matrix[Double] X_sorted) {
-  X_conc = cbind(v, X);
-  X_index = order(target=X_conc, by=1, decreasing = FALSE, index.return=TRUE);
-  X_sorted = order(target=X_conc, by=1, decreasing = FALSE, index.return=FALSE);
-  if (remove_v) {
-    # Remove v Column from data
+# Sorts the rows in dataset X by the vector v. The order is defined by the ascending order of v.
+# Can return the vector v as first column of X, depending on parameter prepend_v.
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X             matrix  ---       Any matrix with rows to be sorted.
+# v             matrix  ---       A vector with the same number of rows as X. Defines ordering.
+# prepend_v     boolean ---       Whether to return v as first column of X.
+#
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# X_index       matrix  A vector with the original row number for each row in X.
+# X_sorted      matrix  The sorted input matrix X.
+# --------------------------------------------------------------------------------------------
+sort_by_vector = function(Matrix[Double] X, Matrix[Double] v, Boolean prepend_v) return (Matrix[Double] X_index, Matrix[Double] X_sorted) {
+  X_index = order(target=v, by=1, decreasing = FALSE, index.return=TRUE);
+  X_sorted = order(target=cbind(v, X), by=1, decreasing = FALSE, index.return=FALSE);
+  if (!prepend_v) {
     X_sorted = X_sorted[,2:ncol(X_sorted)];
   }
 }
 
+# Sorts the rows in dataset X by their sum.
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X             matrix  ---       Any matrix with rows to be sorted.
+#
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# X_index       matrix  A vector with the original row number for each row in X.
+# X_sorted      matrix  The sorted input matrix X.
+# --------------------------------------------------------------------------------------------
 row_sum_sorting = function(Matrix[Double] X) return (Matrix[Double] X_index, Matrix[Double] X_sorted) {
   X_rowSum = rowSums(X);
-  [X_index, X_sorted] = sort_by_vector(X, X_rowSum, TRUE);
+  [X_index, X_sorted] = sort_by_vector(X, X_rowSum, FALSE);
 }
 
+# Sorts the rows in dataset X by their original row numbers (index).
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X             matrix  ---       Any matrix with rows to be sorted.
+# X_index       matrix  ---       The orginal row numbers to be restored.
+#
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# X_reindex     matrix  The reindexed matrix X.
+# --------------------------------------------------------------------------------------------
 reindex_rowwise = function(Matrix[Double] X, Matrix[Double] X_index) return (Matrix[Double] X_reindex) {
   X_conc = cbind(X_index, X);
   X_reindex = order(target=X_conc, by=1, decreasing = FALSE, index.return=FALSE);
@@ -86,7 +153,7 @@ aggregate_lsh_code = function(Matrix[Double] X_code) return (Matrix[Double] X_ag
 lsh_sorting = function(Matrix[Double] X, Integer num_hyperplanes) return (Matrix[Double] X_index, Matrix[Double] X_hash, Matrix[Double] X_sorted) {
   X_code = lsh(X, num_hyperplanes);
   X_agg = aggregate_lsh_code(X_code);
-  [X_index, X_sorted_with_hash] = sort_by_vector(X, X_agg, FALSE);
+  [X_index, X_sorted_with_hash] = sort_by_vector(X, X_agg, TRUE);
   X_sorted = X_sorted_with_hash[,2:ncol(X_sorted_with_hash)];
   X_hash = X_sorted_with_hash[,1];
 }
