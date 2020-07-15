@@ -19,6 +19,32 @@
 #
 #-------------------------------------------------------------
 
+#
+# THIS SCRIPT PERFORMS AN ENTITY RESOLUTION PIPELINE FOR BINARY MATCHING ON TWO FILES
+#
+# INPUT PARAMETERS:
+# ---------------------------------------------------------------------------------------------
+# NAME           TYPE   DEFAULT  MEANING
+# ---------------------------------------------------------------------------------------------
+# FX             String  ---     Location to read the frame of tokens in bow format for the first dataset
+#                                Each line contains comma separated list of id, token and value
+# FY             String  ---     Location to read the frame of tokens in bow format for the second dataset
+#                                Each line contains comma separated list of id, token and value
+# OUT            String  ---     Location to save the output of maching pairs
+#                                Each line contains comma separated ids of one matched pair
+#                                First column is for the first dataset, while second columns is the id of the second one
+#                                Third column provides the similarity score
+# threshold      Double  0.9     Threshold to be considered as a match
+# use_tokens     Boolean TRUE    Whether to use the tokens of FX and FY to generate predictions
+# use_embeddings Boolean FALSE   Whether to use the embeddings of XE and YE to generate predictions
+# XE             String  ---     Location to read the frame of embedding matrix for the first dataset
+#                                Required if use_embeddings is set to TRUE
+# YE             String  ---     Location to read the frame of embedding matrix for the second dataset
+#                                Required if use_embeddings is set to TRUE
+# ---------------------------------------------------------------------------------------------
+# OUTPUT: frame of maching pairs
+# ---------------------------------------------------------------------------------------------
+
 source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post;
 source("./scripts/algorithms/entity-resolution/primitives/preprocessing.dml") as pre;
 source("./scripts/algorithms/entity-resolution/primitives/pipeline.dml") as pipe;

@@ -32,30 +32,28 @@
 # FY    String  ---     Location to read the frame of the ground truth
 #                       Each line contains comma separated ids of one matched pair
 #                       Remainig columns (>2) are ignored
-# MX    String  ---     Location to read the frame of the transformation created during entity resolution
 # ---------------------------------------------------------------------------------------------
 # OUTPUT: prints different evaluation metrics (accuracy, F1)
-# -----------------------------------------------
+# ---------------------------------------------------------------------------------------------
 
 source("./scripts/algorithms/entity-resolution/primitives/evaluation.dml") as eval;
 
 # Command Line Arguments
 fileFX = $FX;
 fileFY = $FY;
-fileMX = $MX;
+
+use_MX = ifdef($use_MX, FALSE);
 
 # Read data
 FX = read(fileFX);
 FY = read(fileFY);
-MX = read(fileMX);
 
 # Transform the data
-M = cbind(MX[,1],MX[,1]);
-jspec="{recode:[C1,C2]}";
-X = transformapply(target=FX[,1:2], spec=jspec, meta=M);
-Y = transformapply(target=FY[,1:2], spec=jspec, meta=M);
-PRED = table(X[,1], X[,2], 1);
-GT = table(Y[,1], Y[,2], 1);
+[XY, MX] = transformencode(target=rbind(FX[,1:2],FY[,1:2]), spec="{recode:[C1,C2]}");
+X = XY[1:nrow(FX),];
+Y = XY[nrow(FX)+1:nrow(FX)+nrow(FY),];
+PRED = table(X[,1], X[,2], nrow(MX), nrow(MX));
+GT = table(Y[,1], Y[,2], nrow(MX), nrow(MX));
 
 # Perform the evaluation
 eval::print_eval_stats(PRED, GT);

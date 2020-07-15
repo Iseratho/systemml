@@ -19,6 +19,32 @@
 #
 #-------------------------------------------------------------
 
+#
+# THIS SCRIPT PERFORMS AN ENTITY RESOLUTION PIPELINE FOR CLUSTERING ON A SINGLE FILE
+# CONSISTS OF BLOCKING, MATCHING, AND CLUSTERING
+#
+# INPUT PARAMETERS:
+# ---------------------------------------------------------------------------------------------
+# NAME           TYPE   DEFAULT  MEANING
+# ---------------------------------------------------------------------------------------------
+# FX             String  ---     Location to read the frame of tokens in bow format
+#                                Each line contains comma separated list of id, token and value
+# OUT            String  ---     Location to save the output of maching pairs
+#                                Each line contains comma separated ids of one matched pair
+#                                Third column provides the similarity score
+# threshold      Double  0.9     Threshold to be considered as a match
+# num_blocks     Int     1       Number of blocks for blocking
+# use_tokens     Boolean TRUE    Whether to use the tokens of FX to generate predictions
+# use_embeddings Boolean FALSE   Whether to use the embeddings of XE to generate predictions
+# XE             String  ---     Location to read the frame of embedding matrix
+#                                Required if use_embeddings is set to TRUE
+# store_mapping  Boolean TRUE    Whether to stare the mapping of transformencode
+# MX             String  ---     Location to write the frame of mapping
+#                                Required if store_mapping is set to TRUE
+# ---------------------------------------------------------------------------------------------
+# OUTPUT: frame of maching pairs
+# ---------------------------------------------------------------------------------------------
+
 source("./scripts/algorithms/entity-resolution/primitives/preprocessing.dml") as pre;
 source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post;
 source("./scripts/algorithms/entity-resolution/primitives/pipeline.dml") as pipe;
@@ -31,11 +57,11 @@ threshold = ifdef($threshold, 0.9);
 num_blocks = ifdef($num_blocks, 1);
 use_tokens = ifdef($use_tokens, TRUE);
 use_embeddings = ifdef($use_embeddings, FALSE);
+# file XE is only required if using embeddings
+fileXE = ifdef($XE, "");
 # mapping file is required for evaluation
 store_mapping = ifdef($store_mapping, TRUE);
 fileMX = ifdef($MX, "");
-# file XE is only required if using embeddings
-fileXE = ifdef($XE, "");
 
 # Read data
 FX = read(fileFX);
