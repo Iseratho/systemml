@@ -16,7 +16,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.*;
 
 @RunWith(value = Parameterized.class)
-public class EntityResolutionTest extends AutomatedTestBase {
+public class EntityClusteringTest extends AutomatedTestBase {
     private final static String TEST_NAME = "EntityResolution";
     private final static String TEST_DIR = "applications/entity_resolution/";
 
@@ -37,7 +37,7 @@ public class EntityResolutionTest extends AutomatedTestBase {
         addTestConfiguration(TEST_DIR, TEST_NAME);
     }
 
-    public EntityResolutionTest(double threshold, int numBlocks, BlockingMethod blockingMethod, int numLshHashtables, int numLshHyperplanes) {
+    public EntityClusteringTest(double threshold, int numBlocks, BlockingMethod blockingMethod, int numLshHashtables, int numLshHyperplanes) {
         this.threshold = threshold;
         this.numBlocks = numBlocks;
         this.blockingMethod = blockingMethod;
@@ -83,22 +83,6 @@ public class EntityResolutionTest extends AutomatedTestBase {
                         5,
                         5,
                 },
-//                {
-//                        0.9,
-//                        1
-//                },
-//                {
-//                        0.1,
-//                        1
-//                },
-//                {
-//                        0.1,
-//                        2
-//                },
-//                {
-//                        0.1,
-//                        3
-//                },
         };
         return Arrays.asList(data);
     }
@@ -106,7 +90,6 @@ public class EntityResolutionTest extends AutomatedTestBase {
     @Test
     public void testScriptEndToEnd() throws IOException {
         Types.ExecMode platformOld = Types.ExecMode.HYBRID;
-        disableOutAndExpectedDeletion();
 
         try {
             TestConfiguration config = getTestConfiguration(TEST_NAME);

@@ -86,7 +86,6 @@ public class EntityResolutionBlockingTest extends AutomatedTestBase {
     @Test
     public void testNaiveBlocking() {
         Types.ExecMode platformOld = Types.ExecMode.HYBRID;
-        disableOutAndExpectedDeletion();
 
         try {
             TestConfiguration config = getTestConfiguration(TEST_NAME);

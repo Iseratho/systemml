@@ -3,5 +3,5 @@
 source("./scripts/algorithms/entity-resolution/primitives/blocking.dml") as blocking;
 
 A = read($inFile);
-B = blocking::naive(A, $targetNumBlocks);
+B = blocking::naive_blocking(A, $targetNumBlocks);
 write(B, $outFile);
