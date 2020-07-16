@@ -91,17 +91,12 @@ if (use_tokens & use_embeddings) {
 } else {
   print("Either use_tokens or use_embeddings needs to be TRUE, using tokens only as default.");
 }
-
 # Perform matching
-#THRES = pipe::binary_entity_resolution_pipeline(X, Y, 1, threshold);
 THRES = pipe::binary_entity_resolution_pipeline_lsh(X, Y, num_hashtables, num_hyperplanes, threshold);
-
 sparse = post::untable(THRES);
-print(toString(sparse, rows=10, cols=10))
 
 # Write results
 X_dec = transformdecode(target=sparse[,1], meta=MX_ids[,1], spec="{recode:[C1]}");
 Y_dec = transformdecode(target=sparse[,2], meta=MY_ids[,1], spec="{recode:[C1]}");
 output = cbind(cbind(X_dec, Y_dec), as.frame(sparse[,3]));
-print(toString(output, rows=10));
 write(output, fileOUT, sep=",", sparse=FALSE, format="csv");
