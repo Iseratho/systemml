@@ -80,3 +80,36 @@ binary_entity_resolution_pipeline = function(Matrix[Double] X, Matrix[Double] Y,
   XY_pairs = match::tresholding(XY_sim, threshold);
   # Clustering is not needed in this case
 }
+
+binary_entity_resolution_pipeline_lsh = function(Matrix[Double] X, Matrix[Double] Y, Integer num_hashtables, Integer num_hyperplanes, Double threshold) return (Matrix[Double] XY_pairs) {
+  XY_pairs = matrix(0, nrow(X), nrow(Y));
+  for (hashtable in 1:num_hashtables, check = 0) {
+    [X_index, X_hash, X_sorted, Y_index, Y_hash, Y_sorted, blocks] = block::lsh_blocking2(X, Y, num_hyperplanes);
+    XY_pairs_local = matrix(0, nrow(X), nrow(Y));
+    for (i in 1:nrow(blocks)-1, check = 0) {
+      block_start = blocks[i,];
+      block_end = blocks[i+1,];
+      x_start = as.scalar(block_start[1,1]);
+      x_end = as.scalar(block_end[1,1]) - 1;
+
+      y_start = as.scalar(block_start[1,2]);
+      y_end = as.scalar(block_end[1,2]) - 1;
+      if ((x_end - x_start + 1) > 0 & (y_end - y_start + 1) > 0) {
+        X_block = X_sorted[x_start:x_end,];
+        Y_block = Y_sorted[y_start:y_end,];
+
+        XY_sim = match::cosine2(X_block, Y_block);
+        XY_pairs_block = match::tresholding(XY_sim, threshold);
+        if (sum(XY_pairs_block) > 0) {
+          # Don't write empty blocks
+          # TODO: there is a bug that the expression below cannot be written mutliple times
+          XY_pairs_local[x_start:x_end,y_start:y_end] = XY_pairs_block;
+        }
+      }
+    }
+    XY_pairs_local = block::reindex_rowwise(XY_pairs_local, X_index);
+    XY_pairs_local = t(XY_pairs_local);
+    XY_pairs_local = block::reindex_rowwise(XY_pairs_local, Y_index);
+    XY_pairs = XY_pairs | t(XY_pairs_local);
+  }
+}

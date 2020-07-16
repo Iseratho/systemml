@@ -86,6 +86,7 @@ if (use_embeddings) {
 
 # Convert data
 [X, MX] = pre::convert_frame_tokens_to_matrix_bow(FX);
+X = X[1:3,]
 if (use_tokens & use_embeddings) {
   X = cbind(X, X_embeddings);
 } else if (use_tokens) {

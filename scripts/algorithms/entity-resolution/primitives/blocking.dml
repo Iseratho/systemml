@@ -187,7 +187,7 @@ aggregate_lsh_code = function(Matrix[Double] X_code) return (Matrix[Double] X_ha
 # NAME            TYPE    DEFAULT   MEANING
 # --------------------------------------------------------------------------------------------
 # X               matrix  ---       A matrix that should be hashed.
-# H               matrix  ---       Hyperplanes matrix.
+# H               matrix  ---       Hyperplanes matrix w. shape (num_hyperplanes, ncol(X))
 #
 # Output:
 # --------------------------------------------------------------------------------------------
@@ -198,6 +198,23 @@ aggregate_lsh_code = function(Matrix[Double] X_code) return (Matrix[Double] X_ha
 lsh = function(Matrix[Double] X, Matrix[Double] H) return (Matrix[Double] X_hash) {
   X_plane = X %*% t(H);
   X_hash = aggregate_lsh_code(X_plane);
+}
+
+lsh_find_blocks = function(Matrix[Double] X, Integer dimensions) return (Matrix[Double] BLOCKS){
+  BLOCKS = matrix(0, rows=2^dimensions+1, cols=1)
+  current_hash_value = 0.0;
+  BLOCKS[1,1] = 1
+  for (row_idx in 1:nrow(X)) {
+    this_hash = as.scalar(X[row_idx,1]);
+    if (current_hash_value < this_hash) {
+      for (h in (current_hash_value+2):(this_hash+1)) {
+        BLOCKS[h,1] = row_idx;
+      }
+      current_hash_value = this_hash;
+    }
+  }
+  n_missing_rows = nrow(BLOCKS) - (current_hash_value + 1);
+  BLOCKS[(current_hash_value+2):nrow(BLOCKS),] = matrix(nrow(X) + 1, rows=n_missing_rows, cols=1);
 }
 
 # Blocks the given matrix X by locality sensitive hashing using a set of random hyperplanes.
@@ -223,21 +240,53 @@ lsh_blocking = function(Matrix[Double] X, Integer num_hyperplanes) return (Matri
   H = gen_rand_hyperplanes(num_hyperplanes, ncol(X));
   X_hash = lsh(X, H);
   [X_index, X_sorted_with_hash] = sort_by_vector(X, X_hash, TRUE);
-  # pessimistic allocation, could be optimized
-  tmp_blocks = matrix(0, rows=nrow(X)+1, cols=1)
-  tmp_blocks[1,1] = 1;
-  num_blocks = 1;
-  current_hash_value = as.scalar(X_sorted_with_hash[1,1]);
-  for (row_idx in 2:nrow(X_sorted_with_hash)) {
-      this_hash = as.scalar(X_sorted_with_hash[row_idx,1]);
-      if (current_hash_value != this_hash) {
-        current_hash_value = this_hash;
-        num_blocks = num_blocks + 1;
-        tmp_blocks[num_blocks,1] = row_idx;
-      }
-  }
-  tmp_blocks[num_blocks+1,1] = nrow(X) + 1;
-  BLOCKS = tmp_blocks[1:num_blocks+1,]
+  BLOCKS = lsh_find_blocks(X_sorted_with_hash, num_hyperplanes);
+  B_lengths = rbind(BLOCKS[2:nrow(BLOCKS),] - BLOCKS[1:nrow(BLOCKS)-1,], as.matrix(1));
+  BLOCKS = removeEmpty(target=BLOCKS, margin="rows", select=B_lengths)
   X_sorted = X_sorted_with_hash[,2:ncol(X_sorted_with_hash)];
   X_hash = X_sorted_with_hash[,1];
+}
+
+# Blocks the matrices X and Y by locality sensitive hashing using a set of random hyperplanes.
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME            TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X               matrix  ---       A matrix that should be blocked by LSH.
+# Y               matrix  ---       A matrix that should be blocked by LSH.
+# num_hyperplanes Integer ---       How many hyperplanes to use.
+#
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# X_index       matrix  A vector with the original row number for each row in X.
+# X_hash        matrix  A column vector with the scalar LSH hash code for each row in X.
+# X_sorted      matrix  The sorted input matrix X.
+# Y_index       matrix  A vector with the original row number for each row in Y.
+# Y_hash        matrix  A column vector with the scalar LSH hash code for each row in Y.
+# Y_sorted      matrix  The sorted input matrix Y.
+# BLOCKS        Double  A matrix with start indices for each block. Has one more row
+#                        than blocks such that the last row is the end index of the last block.
+#                        First column is X, second column Y indices.
+# --------------------------------------------------------------------------------------------
+lsh_blocking2 = function(Matrix[Double] X, Matrix[Double] Y, Integer num_hyperplanes) return (
+        Matrix[Double] X_index, Matrix[Double] X_hash, Matrix[Double] X_sorted,
+        Matrix[Double] Y_index, Matrix[Double] Y_hash, Matrix[Double] Y_sorted,
+        Matrix[Double] BLOCKS) {
+  H = gen_rand_hyperplanes(num_hyperplanes, max(ncol(X), ncol(Y)));
+  X_hash = lsh(X, H[,1:ncol(X)]);
+  Y_hash = lsh(Y, H[,1:ncol(Y)]);
+  [X_index, Xs] = sort_by_vector(X, X_hash, TRUE);
+  [Y_index, Ys] = sort_by_vector(Y, Y_hash, TRUE);
+  X_blocks = lsh_find_blocks(Xs, num_hyperplanes);
+  Y_blocks = lsh_find_blocks(Ys, num_hyperplanes);
+  BLOCKS = cbind(X_blocks, Y_blocks)
+  B_lengths = rbind(BLOCKS[2:nrow(BLOCKS),] - BLOCKS[1:nrow(BLOCKS)-1,], matrix(1, rows=1, cols=2));
+  BLOCKS = removeEmpty(target=BLOCKS, margin="rows", select=B_lengths)
+  X_sorted = Xs[,2:ncol(Xs)];
+  X_hash = Xs[,1];
+  Y_sorted = Ys[,2:ncol(Ys)];
+  Y_hash = Ys[,1];
 }
