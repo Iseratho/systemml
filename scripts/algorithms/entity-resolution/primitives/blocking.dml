@@ -187,7 +187,7 @@ aggregate_lsh_code = function(Matrix[Double] X_code) return (Matrix[Double] X_ha
 # NAME            TYPE    DEFAULT   MEANING
 # --------------------------------------------------------------------------------------------
 # X               matrix  ---       A matrix that should be hashed.
-# num_hyperplanes Integer ---       How many hyperplanes to use.
+# H               matrix  ---       Hyperplanes matrix.
 #
 # Output:
 # --------------------------------------------------------------------------------------------
@@ -195,8 +195,7 @@ aggregate_lsh_code = function(Matrix[Double] X_code) return (Matrix[Double] X_ha
 # --------------------------------------------------------------------------------------------
 # X_hash        matrix   A column vector with hash codes. Same number of rows as X.
 # --------------------------------------------------------------------------------------------
-lsh = function(Matrix[Double] X, Integer num_hyperplanes) return (Matrix[Double] X_hash) {
-  H = gen_rand_hyperplanes(num_hyperplanes, ncol(X));
+lsh = function(Matrix[Double] X, Matrix[Double] H) return (Matrix[Double] X_hash) {
   X_plane = X %*% t(H);
   X_hash = aggregate_lsh_code(X_plane);
 }
@@ -221,7 +220,8 @@ lsh = function(Matrix[Double] X, Integer num_hyperplanes) return (Matrix[Double]
 #                        than blocks such that the last row is the end index of the last block.
 # --------------------------------------------------------------------------------------------
 lsh_blocking = function(Matrix[Double] X, Integer num_hyperplanes) return (Matrix[Double] X_index, Matrix[Double] X_hash, Matrix[Double] X_sorted, Matrix[Double] BLOCKS) {
-  X_hash = lsh(X, num_hyperplanes);
+  H = gen_rand_hyperplanes(num_hyperplanes, ncol(X));
+  X_hash = lsh(X, H);
   [X_index, X_sorted_with_hash] = sort_by_vector(X, X_hash, TRUE);
   # pessimistic allocation, could be optimized
   tmp_blocks = matrix(0, rows=nrow(X)+1, cols=1)

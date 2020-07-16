@@ -76,7 +76,6 @@ entity_clustering_pipeline_lsh = function(Matrix[Double] X, Integer num_hashtabl
 }
 
 binary_entity_resolution_pipeline = function(Matrix[Double] X, Matrix[Double] Y, Integer num_blocks, Double threshold) return (Matrix[Double] XY_pairs) {
-  # TODO: blocking
   XY_sim = match::cosine2(X, Y);
   XY_pairs = match::tresholding(XY_sim, threshold);
   # Clustering is not needed in this case

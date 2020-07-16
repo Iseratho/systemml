@@ -27,19 +27,23 @@
 # ---------------------------------------------------------------------------------------------
 # NAME           TYPE   DEFAULT  MEANING
 # ---------------------------------------------------------------------------------------------
-# FX             String  ---     Location to read the frame of tokens in bow format
-#                                Each line contains comma separated list of id, token and value
-# OUT            String  ---     Location to save the output of maching pairs
-#                                Each line contains comma separated ids of one matched pair
-#                                Third column provides the similarity score
-# threshold      Double  0.9     Threshold to be considered as a match
-# num_blocks     Int     1       Number of blocks for blocking
-# use_tokens     Boolean TRUE    Whether to use the tokens of FX to generate predictions
-# use_embeddings Boolean FALSE   Whether to use the embeddings of XE to generate predictions
-# XE             String  ---     Location to read the frame of embedding matrix
-#                                Required if use_embeddings is set to TRUE
-# store_mapping  Boolean TRUE    Whether to stare the mapping of transformencode
-# MX             String  ---     Location to write the frame of mapping
+# FX              String  ---     Location to read the frame of tokens in bow format
+#                                 Each line contains comma separated list of id, token and value
+# OUT             String  ---     Location to save the output of maching pairs
+#                                 Each line contains comma separated ids of one matched pair
+#                                 Third column provides the similarity score
+# threshold       Double  0.9     Threshold to be considered as a match
+# blocking_method String  naive   Possible values: ["naive", "lsh"].
+# num_blocks      Int     1       Number of blocks for naive blocking
+# num_hashtables  Int     6       Number of hashtables for LSH blocking.
+# num_hyperplanes Int     4       Number of hyperplanes for LSH blocking.
+
+# use_tokens      Boolean TRUE    Whether to use the tokens of FX to generate predictions
+# use_embeddings  Boolean FALSE   Whether to use the embeddings of XE to generate predictions
+# XE              String  ---     Location to read the frame of embedding matrix
+#                                 Required if use_embeddings is set to TRUE
+# store_mapping   Boolean FALSE   Whether to store the mapping of transformencode
+# MX              String  ---     Location to write the frame of mapping
 #                                Required if store_mapping is set to TRUE
 # ---------------------------------------------------------------------------------------------
 # OUTPUT: frame of maching pairs
@@ -54,14 +58,21 @@ fileFX = $FX;
 fileOUT = $OUT;
 
 threshold = ifdef($threshold, 0.9);
+blocking_method = ifdef($blocking_method, "naive");
 num_blocks = ifdef($num_blocks, 1);
+num_hyperplanes = ifdef($num_hyperplanes, 1);
+num_hashtables = ifdef($num_hashtables, 1);
 use_tokens = ifdef($use_tokens, TRUE);
 use_embeddings = ifdef($use_embeddings, FALSE);
 # file XE is only required if using embeddings
 fileXE = ifdef($XE, "");
 # mapping file is required for evaluation
-store_mapping = ifdef($store_mapping, TRUE);
+store_mapping = ifdef($store_mapping, FALSE);
 fileMX = ifdef($MX, "");
+
+if (!(blocking_method == "naive" | blocking_method == "lsh")) {
+  print("ERROR: blocking method must be in ['naive', 'lsh']");
+}
 
 # Read data
 FX = read(fileFX);
@@ -94,7 +105,11 @@ if (store_mapping) {
 }
 
 # Perform clustering
-CLUSTER = pipe::entity_clustering_pipeline_lsh(X, 3, 4, threshold);
+if (blocking_method == "naive") {
+  CLUSTER = pipe::entity_clustering_pipeline(X, num_blocks, threshold);
+} else if (blocking_method == "lsh") {
+  CLUSTER = pipe::entity_clustering_pipeline_lsh(X, num_hashtables, num_hyperplanes, threshold);
+}
 MATCH = (CLUSTER > 0);
 
 # Write results
