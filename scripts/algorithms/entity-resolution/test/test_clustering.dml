@@ -31,5 +31,5 @@ A = read("./scripts/algorithms/entity-resolution/test/graph.ijv");
 source("./scripts/algorithms/entity-resolution/primitives/blocking.dml") as block;
 
 print("nrow(A) = %d", nrow(A))
-naive = block::naive(A, 12351);
+naive = block::naive_blocking(A, 12351);
 print(toString(naive));

@@ -8,7 +8,7 @@ print(toString(A));
 H = block::gen_rand_hyperplanes(4,3);
 print(toString(H));
 
-A_code = block::lsh(A, 4);
+A_code = block::lsh_blocking(A, 4);
 print(toString(A_code));
 
 A_val = block::aggregate_lsh_code(A_code);
