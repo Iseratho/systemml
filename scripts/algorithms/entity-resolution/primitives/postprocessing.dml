@@ -19,6 +19,28 @@
 #
 #-------------------------------------------------------------
 
+# Inverse operation of table. Converts a contingency table/adjacency matrix to a list of tuples
+# in the form (id1, id2, value) representing edges in the case of an adjacency matrix.
+#
+# The offsets can be used in order to restore the original ids in case the input to table was
+# concatenated from two datasets.
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME              TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X                 matrix  ---       A contingency table/adjacency matrix.
+# row_offset        Integer ---       The number of rows of the first concatenated dataset.
+#                                      Use 0 for the default case.
+# col_offset        Integer ---       The number of columns of the first concatenated dataset.
+#                                      Use 0 for the default case.
+#
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# SPARSE        matrix  ---       List of tuples in the form (id1, id2, value).
+# --------------------------------------------------------------------------------------------
 untable_offset = function(Matrix[Double] X, Integer row_offset, Integer col_offset) return (Matrix[Double] SPARSE) {
   n_row = nrow(X);
   n_col = ncol(X);
@@ -38,6 +60,21 @@ untable_offset = function(Matrix[Double] X, Integer row_offset, Integer col_offs
   SPARSE = removeEmpty(target=dense, margin="rows", select=dense[,3]);
 }
 
+# Inverse operation of table. Converts a contingency table/adjacency matrix to a list of tuples
+# in the form (id1, id2, value) representing edges in the case of an adjacency matrix.
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME              TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X                 matrix  ---       A contingency table/adjacency matrix.
+#
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# SPARSE        matrix  ---       List of tuples in the form (id1, id2, value).
+# --------------------------------------------------------------------------------------------
 untable = function(Matrix[Double] X) return (Matrix[Double] SPARSE) {
   SPARSE = untable_offset(X, 0, 0);
 }

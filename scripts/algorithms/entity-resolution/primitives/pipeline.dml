@@ -23,6 +23,31 @@ source("./scripts/algorithms/entity-resolution/primitives/blocking.dml") as bloc
 source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match;
 source("./scripts/algorithms/entity-resolution/primitives/clustering.dml") as cluster;
 
+
+# Very simple entity clustering pipeline which should work relatively well for small datasets.
+#
+# Blocks the input dataset X into num_blocks non-overlapping regions, after sorting the dataset
+# by the sum of its rows. This is a very simple blocking scheme which serves mainly as a baseline
+# example and will result in non-optimal performance. However, if no blocking is needed, this
+# can be used with num_blocks=1.
+#
+# Uses a threshold for similarity to link entities and clusters them by also connecting all
+# entities in each connected compontent ('makes each connected component fully connected').
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X             matrix  ---       A dataset for which duplicates should be found.
+# num_blocks    Integer ---       How many blocks to produce.
+# threshold     Double  ---       Similarity threshold which is used to decide if two entities
+#                                  are duplicates.
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# X_cluster     matrix   A symmetrical adjacency matrix for X defining the found duplicates.
+# --------------------------------------------------------------------------------------------
 entity_clustering_pipeline = function(Matrix[Double] X, Integer num_blocks, Double threshold) return (Matrix[Double] X_cluster) {
   # First sort the matrix
   [X_index, X_sorted] = block::row_sum_sorting(X);
@@ -46,6 +71,36 @@ entity_clustering_pipeline = function(Matrix[Double] X, Integer num_blocks, Doub
   X_cluster = block::reindex_rows_and_cols(X_cluster, X_index);
 }
 
+# Entity clustering pipeline using locality-sensitive hashing as a blocking algorithm to improve
+# runtime on large datasets. The tradeoff between accuracy and performance can be configured
+# via the num_hashtables and num_hyperplanes parameters.
+#
+# For more details on LSH, see:
+#  Ebraheem, Muhammad, et al. "Distributed representations of tuples for entity resolution."
+#  Proceedings of the VLDB Endowment 11.11 (2018): 1454-1467.
+#
+# Uses a threshold for similarity to link entities and clusters them by also connecting all
+# entities in each connected compontent ('makes each connected component fully connected').
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME            TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X               matrix  ---       A dataset for which duplicates should be found.
+# num_hashtables  Integer ---       How often to block the dataset using random hyperplanes and
+#                                     compute similarities.
+#                                     Increases runtime and improves accuracy.
+# num_hyperplanes Integer ---       The dimensionality of the random hyperplanes.
+#                                     Higher values produce smaller blocks and require a higher
+#                                     number of num_hashtables to avoid losing accuracy.
+# threshold       Double  ---       Similarity threshold which is used to decide if two entities
+#                                    are duplicates.
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# X_cluster     matrix   A symmetrical adjacency matrix for X defining the found duplicates.
+# --------------------------------------------------------------------------------------------
 entity_clustering_pipeline_lsh = function(Matrix[Double] X, Integer num_hashtables, Integer num_hyperplanes, Double threshold) return (Matrix[Double] X_cluster) {
   X_cluster = matrix(0, nrow(X), nrow(X));
   # First get the LSH blocks
@@ -63,10 +118,8 @@ entity_clustering_pipeline_lsh = function(Matrix[Double] X, Integer num_hashtabl
       X_match = (X_sim > threshold);
       X_comp = cluster::cluster_by_connected_components(X_match);
       X_new_block = X_cluster_local[block_start:block_end,block_start:block_end] | (X_comp * X_sim);
+      # Workaround for a bug where assigning a sparse matrix multiple times leads to an error in the SystemDS runtime.
       if (sum(X_new_block) > 0) {
-        # Don't write empty blocks
-        #X_cluster[block_start:block_end,block_start:block_end] = rand(rows=block_end-block_start+1, cols=block_end-block_start+1, sparsity=0.05);
-        # TODO: there is a bug that the expression below cannot be written mutliple times
         X_cluster_local[block_start:block_end,block_start:block_end] = X_new_block;
       }
     }
@@ -75,12 +128,65 @@ entity_clustering_pipeline_lsh = function(Matrix[Double] X, Integer num_hashtabl
   }
 }
 
-binary_entity_resolution_pipeline = function(Matrix[Double] X, Matrix[Double] Y, Integer num_blocks, Double threshold) return (Matrix[Double] XY_pairs) {
+# Very simple binary entity resolution pipeline which computes similarity between rows of two
+# datasets. This mainly serves as a baseline example and does not use blocking. It is not
+# suitable for large datasets.
+#
+# Uses a threshold for similarity to link entities.
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME            TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X               matrix  ---       A dataset to be compared with Y.
+# Y               matrix  ---       A dataset to be compared with X.
+# threshold       Double  ---       Similarity threshold which is used to decide if two
+#                                    entities are duplicates.
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# XY_pairs     matrix   An adjacency matrix defining the found duplicates between X and Y.
+#                        Shape is (nrow(X), nrow(Y)).
+# --------------------------------------------------------------------------------------------
+binary_entity_resolution_pipeline = function(Matrix[Double] X, Matrix[Double] Y, Double threshold) return (Matrix[Double] XY_pairs) {
   XY_sim = match::cosine2(X, Y);
   XY_pairs = match::tresholding(XY_sim, threshold);
-  # Clustering is not needed in this case
 }
 
+# Binary entity resolution pipeline using locality-sensitive hashing as a blocking algorithm
+# to improve runtime on large datasets.
+#
+# The tradeoff between accuracy and performance can be configured
+# via the num_hashtables and num_hyperplanes parameters.
+#
+# For more details on LSH, see:
+#  Ebraheem, Muhammad, et al. "Distributed representations of tuples for entity resolution."
+#  Proceedings of the VLDB Endowment 11.11 (2018): 1454-1467.
+#
+# Uses a threshold for similarity to link entities.
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME            TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# X               matrix  ---       A dataset to be compared with Y.
+# Y               matrix  ---       A dataset to be compared with X.
+# num_hashtables  Integer ---       How often to block the dataset using random hyperplanes and
+#                                     compute similarities.
+#                                     Increases runtime and improves accuracy.
+# num_hyperplanes Integer ---       The dimensionality of the random hyperplanes.
+#                                     Higher values produce smaller blocks and require a higher
+#                                     number of num_hashtables to avoid losing accuracy.
+# threshold       Double  ---       Similarity threshold which is used to decide if two
+#                                    entities are duplicates.
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# XY_pairs     matrix   An adjacency matrix defining the found duplicates between X and Y.
+#                        Shape is (nrow(X), nrow(Y)).
+# --------------------------------------------------------------------------------------------
 binary_entity_resolution_pipeline_lsh = function(Matrix[Double] X, Matrix[Double] Y, Integer num_hashtables, Integer num_hyperplanes, Double threshold) return (Matrix[Double] XY_pairs) {
   XY_pairs = matrix(0, nrow(X), nrow(Y));
   for (hashtable in 1:num_hashtables, check = 0) {
@@ -100,9 +206,8 @@ binary_entity_resolution_pipeline_lsh = function(Matrix[Double] X, Matrix[Double
 
         XY_sim = match::cosine2(X_block, Y_block);
         XY_pairs_block = match::tresholding(XY_sim, threshold);
+        # Workaround for a bug where assigning a sparse matrix multiple times leads to an error in the SystemDS runtime.
         if (sum(XY_pairs_block) > 0) {
-          # Don't write empty blocks
-          # TODO: there is a bug that the expression below cannot be written mutliple times
           XY_pairs_local[x_start:x_end,y_start:y_end] = XY_pairs_block;
         }
       }

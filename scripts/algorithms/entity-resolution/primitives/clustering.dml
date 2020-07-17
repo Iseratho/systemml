@@ -19,6 +19,31 @@
 #
 #-------------------------------------------------------------
 
+# Recursive depth-first search which in some cases can run into stack overflow errors in the
+# SystemDS runtime. Not recommended, use dfs_iter instead!
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME              TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# GRAPH             matrix  ---       An adjacency matrix.
+# start_vertex      Integer ---       The vertex to start the search from.
+# marked            matrix  ---       Column-vector which is used to mark already visited
+#                                      vertices. A value of 1 means already visited, 0 means
+#                                      unvisited.
+# id                matrix  ---       Column-vector which the connected component of each vertex
+#                                      is written to.
+# current_component Integer ---       The component id which is written to each visited vertex'
+#                                      entry in the id vector.
+#
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# id            matrix  ---       Column-vector which the connected component of each vertex is written to.
+# marked        matrix  ---       Column-vector which is used to mark already visited vertices.
+#                                  A value of 1 means already visited, 0 means unvisited.
+# --------------------------------------------------------------------------------------------
 dfs = function(Matrix[Double] GRAPH, Integer vertex, Matrix[Double] marked, Matrix[Double] id, Integer count) return (Matrix[Double] id, Matrix[Double] marked) {
   marked[vertex,] = 1;
   id[vertex,] = count;
@@ -31,6 +56,32 @@ dfs = function(Matrix[Double] GRAPH, Integer vertex, Matrix[Double] marked, Matr
   }
 }
 
+# Iterative depth-first search with a manually allocated stack in order to avoid stack overflow
+# errors.
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME              TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# GRAPH             matrix  ---       An adjacency matrix.
+# start_vertex      Integer ---       The vertex to start the search from.
+# marked            matrix  ---       Column-vector which is used to mark already visited
+#                                      vertices. A value of 1 means already visited, 0 means
+#                                      unvisited.
+# id                matrix  ---       Column-vector which the connected component of each vertex
+#                                      is written to.
+# current_component Integer ---       The component id which is written to each visited vertex'
+#                                      entry in the id vector.
+#
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# id            matrix  ---       Column-vector which the connected component of each vertex is
+#                                  written to.
+# marked        matrix  ---       Column-vector which is used to mark already visited vertices.
+#                                  A value of 1 means already visited, 0 means unvisited.
+# --------------------------------------------------------------------------------------------
 dfs_iter = function(Matrix[Double] GRAPH, Integer start_vertex, Matrix[Double] marked, Matrix[Double] id, Integer current_component) return (Matrix[Double] id, Matrix[Double] marked) {
   nvert =  ncol(GRAPH);
   stack_idx = matrix(0, rows=nvert, cols=1);
@@ -74,7 +125,21 @@ dfs_iter = function(Matrix[Double] GRAPH, Integer start_vertex, Matrix[Double] m
   }
 }
 
-
+# Makes all connected components in the adjacency matrix GRAPH fully-connected.
+#
+# INPUT PARAMETERS:
+# --------------------------------------------------------------------------------------------
+# NAME              TYPE    DEFAULT   MEANING
+# --------------------------------------------------------------------------------------------
+# GRAPH             matrix  ---       An adjacency matrix.
+#
+# Output:
+# --------------------------------------------------------------------------------------------
+# NAME          TYPE     MEANING
+# --------------------------------------------------------------------------------------------
+# GRAPH             matrix  ---       An adjacency matrix with all connected components fully
+#                                      connected.
+# --------------------------------------------------------------------------------------------
 cluster_by_connected_components = function(Matrix[Double] ADJACENCY) return (Matrix[Double] COMPONENTS) {
   rows = nrow(ADJACENCY);
   marked = matrix(0, rows=rows, cols=1);
