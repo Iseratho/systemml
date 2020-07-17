@@ -94,7 +94,7 @@ public class EntityClusteringTest extends AutomatedTestBase {
         try {
             TestConfiguration config = getTestConfiguration(TEST_NAME);
             loadTestConfiguration(config);
-            fullDMLScriptName = "./scripts/algorithms/entity-resolution/entity-clustering.dml";;
+            fullDMLScriptName = "./scripts/staging/entity-resolution/entity-clustering.dml";;
 
             programArgs = new String[]{
                     "-nvargs", //

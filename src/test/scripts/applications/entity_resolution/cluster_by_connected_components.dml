@@ -1,6 +1,6 @@
 
 
-source("./scripts/algorithms/entity-resolution/primitives/clustering.dml") as cluster;
+source("./scripts/staging/entity-resolution/primitives/clustering.dml") as cluster;
 
 A = read($inFile);
 B = cluster::cluster_by_connected_components(A);

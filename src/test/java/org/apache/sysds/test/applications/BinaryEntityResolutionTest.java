@@ -67,7 +67,7 @@ public class BinaryEntityResolutionTest extends AutomatedTestBase {
         try {
             TestConfiguration config = getTestConfiguration(TEST_NAME);
             loadTestConfiguration(config);
-            fullDMLScriptName = "./scripts/algorithms/entity-resolution/binary-entity-resolution.dml";;
+            fullDMLScriptName = "./scripts/staging/entity-resolution/binary-entity-resolution.dml";;
 
             programArgs = new String[]{
                     "-nvargs", //

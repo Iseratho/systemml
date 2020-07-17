@@ -19,9 +19,9 @@
 #
 #-------------------------------------------------------------
 
-source("./scripts/algorithms/entity-resolution/primitives/blocking.dml") as block;
-source("./scripts/algorithms/entity-resolution/primitives/matching.dml") as match;
-source("./scripts/algorithms/entity-resolution/primitives/clustering.dml") as cluster;
+source("./scripts/staging/entity-resolution/primitives/blocking.dml") as block;
+source("./scripts/staging/entity-resolution/primitives/matching.dml") as match;
+source("./scripts/staging/entity-resolution/primitives/clustering.dml") as cluster;
 
 
 # Very simple entity clustering pipeline which should work relatively well for small datasets.

@@ -20,83 +20,100 @@
 #-------------------------------------------------------------
 
 #
-# THIS SCRIPT PERFORMS AN ENTITY RESOLUTION PIPELINE FOR BINARY MATCHING ON TWO FILES
+# THIS SCRIPT PERFORMS AN ENTITY RESOLUTION PIPELINE FOR CLUSTERING ON A SINGLE FILE
+# CONSISTS OF BLOCKING, MATCHING, AND CLUSTERING
 #
 # INPUT PARAMETERS:
 # ---------------------------------------------------------------------------------------------
 # NAME           TYPE   DEFAULT  MEANING
 # ---------------------------------------------------------------------------------------------
-# FX              String  ---     Location to read the frame of tokens in bow format for the first dataset
-#                                 Each line contains comma separated list of id, token and value
-# FY              String  ---     Location to read the frame of tokens in bow format for the second dataset
+# FX              String  ---     Location to read the frame of tokens in bow format
 #                                 Each line contains comma separated list of id, token and value
 # OUT             String  ---     Location to save the output of maching pairs
 #                                 Each line contains comma separated ids of one matched pair
-#                                 First column is for the first dataset, while second columns is the id of the second one
 #                                 Third column provides the similarity score
 # threshold       Double  0.9     Threshold to be considered as a match
+# blocking_method String  naive   Possible values: ["naive", "lsh"].
+# num_blocks      Int     1       Number of blocks for naive blocking
 # num_hashtables  Int     6       Number of hashtables for LSH blocking.
 # num_hyperplanes Int     4       Number of hyperplanes for LSH blocking.
-# use_tokens      Boolean TRUE    Whether to use the tokens of FX and FY to generate predictions
-# use_embeddings  Boolean FALSE   Whether to use the embeddings of XE and YE to generate predictions
-# XE              String  ---     Location to read the frame of embedding matrix for the first dataset
+
+# use_tokens      Boolean TRUE    Whether to use the tokens of FX to generate predictions
+# use_embeddings  Boolean FALSE   Whether to use the embeddings of XE to generate predictions
+# XE              String  ---     Location to read the frame of embedding matrix
 #                                 Required if use_embeddings is set to TRUE
-# YE              String  ---     Location to read the frame of embedding matrix for the second dataset
-#                                Required if use_embeddings is set to TRUE
+# store_mapping   Boolean FALSE   Whether to store the mapping of transformencode
+# MX              String  ---     Location to write the frame of mapping
+#                                Required if store_mapping is set to TRUE
 # ---------------------------------------------------------------------------------------------
 # OUTPUT: frame of maching pairs
 # ---------------------------------------------------------------------------------------------
 
-source("./scripts/algorithms/entity-resolution/primitives/postprocessing.dml") as post;
-source("./scripts/algorithms/entity-resolution/primitives/preprocessing.dml") as pre;
-source("./scripts/algorithms/entity-resolution/primitives/pipeline.dml") as pipe;
+source("./scripts/staging/entity-resolution/primitives/preprocessing.dml") as pre;
+source("./scripts/staging/entity-resolution/primitives/postprocessing.dml") as post;
+source("./scripts/staging/entity-resolution/primitives/pipeline.dml") as pipe;
 
 # Command Line Arguments
 fileFX = $FX;
-fileFY = $FY;
 fileOUT = $OUT;
 
 threshold = ifdef($threshold, 0.9);
-num_hashtables = ifdef($num_hashtables, 6);
+blocking_method = ifdef($blocking_method, "lsh");
+num_blocks = ifdef($num_blocks, 1);
 num_hyperplanes = ifdef($num_hyperplanes, 4);
-
+num_hashtables = ifdef($num_hashtables, 6);
 use_tokens = ifdef($use_tokens, TRUE);
 use_embeddings = ifdef($use_embeddings, FALSE);
-# file XE and YE is only required if using embeddings
+# file XE is only required if using embeddings
 fileXE = ifdef($XE, "");
-fileYE = ifdef($YE, "");
+# mapping file is required for evaluation
+store_mapping = ifdef($store_mapping, FALSE);
+fileMX = ifdef($MX, "");
+
+if (!(blocking_method == "naive" | blocking_method == "lsh")) {
+  print("ERROR: blocking method must be in ['naive', 'lsh']");
+}
 
 # Read data
 FX = read(fileFX);
-FY = read(fileFY);
 if (use_embeddings) {
-  if (fileXE == "" | fileYE == "") {
-    print("You need to specify file XE and XY when use_embeddings is set to TRUE");
+  if (fileXE == "") {
+    print("You need to specify file XE when use_embeddings is set to TRUE");
   } else {
     X_embeddings = read(fileXE);
-    Y_embeddings = read(fileYE);
   }
 }
 
 # Convert data
-[X, Y, M_tokens, MX_ids, MY_ids] = pre::convert_frame_tokens_to_matrix_bow_2(FX,FY);
+[X, MX] = pre::convert_frame_tokens_to_matrix_bow(FX);
 if (use_tokens & use_embeddings) {
   X = cbind(X, X_embeddings);
-  Y = cbind(Y, Y_embeddings);
 } else if (use_tokens) {
   # Nothing to do in this case, since X already contains tokens
 } else if (use_embeddings) {
   X = X_embeddings;
-  Y = Y_embeddings;
 } else {
   print("Either use_tokens or use_embeddings needs to be TRUE, using tokens only as default.");
 }
-# Perform matching
-THRES = pipe::binary_entity_resolution_pipeline_lsh(X, Y, num_hashtables, num_hyperplanes, threshold);
-sparse = post::untable(THRES);
+
+if (store_mapping) {
+  if (fileMX == "") {
+    print("You need to specify file MX when store_mapping is set to TRUE.");
+  } else {
+    write(MX, fileMX);
+  }
+}
+
+# Perform clustering
+if (blocking_method == "naive") {
+  CLUSTER = pipe::entity_clustering_pipeline(X, num_blocks, threshold);
+} else if (blocking_method == "lsh") {
+  CLUSTER = pipe::entity_clustering_pipeline_lsh(X, num_hashtables, num_hyperplanes, threshold);
+}
+MATCH = (CLUSTER > 0);
 
 # Write results
-X_dec = transformdecode(target=sparse[,1], meta=MX_ids[,1], spec="{recode:[C1]}");
-Y_dec = transformdecode(target=sparse[,2], meta=MY_ids[,1], spec="{recode:[C1]}");
-output = cbind(cbind(X_dec, Y_dec), as.frame(sparse[,3]));
+sparse = post::untable(CLUSTER);
+dec = transformdecode(target=sparse, meta=cbind(MX[,1],MX[,1]), spec="{recode:[C1,C2]}");
+output = cbind(dec, as.frame(sparse[,3]));
 write(output, fileOUT, sep=",", sparse=FALSE, format="csv");

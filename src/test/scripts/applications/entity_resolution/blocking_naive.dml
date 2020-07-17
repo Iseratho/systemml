@@ -1,6 +1,6 @@
 
 
-source("./scripts/algorithms/entity-resolution/primitives/blocking.dml") as blocking;
+source("./scripts/staging/entity-resolution/primitives/blocking.dml") as blocking;
 
 A = read($inFile);
 B = blocking::naive_blocking(A, $targetNumBlocks);
