@@ -220,7 +220,8 @@ public class TestUtils
 
 			Set<CellIndex> allKeys = new HashSet<>();
 			allKeys.addAll(expectedValues.keySet());
-			allKeys.addAll(actualValues.keySet());
+			if(expectedValues.size() != actualValues.size())
+				allKeys.addAll(actualValues.keySet());
 
 			int countErrors = 0;
 			for (CellIndex index : allKeys) {
@@ -351,7 +352,8 @@ public class TestUtils
 
 		Set<CellIndex> allKeys = new HashSet<>();
 		allKeys.addAll(expectedValues.keySet());
-		allKeys.addAll(actualValues.keySet());
+		if(expectedValues.size() != actualValues.size())
+			allKeys.addAll(actualValues.keySet());
 		int countErrors = 0;
 		for(CellIndex index : allKeys) {
 			Double expectedValue = (Double) expectedValues.get(index);
@@ -391,7 +393,8 @@ public class TestUtils
 
 		Set<CellIndex> allKeys = new HashSet<>();
 		allKeys.addAll(expectedValues.keySet());
-		allKeys.addAll(actualValues.keySet());
+		if(expectedValues.size() != actualValues.size())
+			allKeys.addAll(actualValues.keySet());
 		int countErrors = 0;
 		for(CellIndex index : allKeys) {
 			Object expectedValue = expectedValues.get(index);
@@ -1118,7 +1121,8 @@ public class TestUtils
 			}
 			Set<CellIndex> allKeys = new HashSet<>();
 			allKeys.addAll(expectedValues.keySet());
-			allKeys.addAll(actualValues.keySet());
+			if(expectedValues.size() != actualValues.size())
+				allKeys.addAll(actualValues.keySet());
 
 			int countErrors = 0;
 			for (CellIndex index : allKeys) {
