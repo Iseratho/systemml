@@ -60,6 +60,7 @@ limitations under the License.
     * [Indexing Frames](#indexing-frames)
     * [Casting Frames](#casting-frames)
     * [Transforming Frames](#transforming-frames)
+    * [Processing Frames](#processing-frames)
   * [Modules](#modules)
   * [Reserved Keywords](#reserved-keywords)
 
@@ -740,7 +741,9 @@ The output F will have exactly 10 rows and 1 column. F may be a truncated or pad
 #### Probability Distribution Functions
 
 
-##### `p = cdf(target=q, dist=fn, ..., lower.tail=TRUE)`
+```
+`p = cdf(target=q, dist=fn, ..., lower.tail=TRUE)`
+```
 
 This computes the cumulative probability at the given quantile i.e., P[X&lt;=q], where X is random variable whose distribution is specified via string argument fn.
 
@@ -753,8 +756,9 @@ This computes the cumulative probability at the given quantile i.e., P[X&lt;=q],
     * For `dist="exp"`, valid parameter is rate that specifies the rate at which events occur. Note that the mean of exponential distribution is 1.0/rate. The default value is 1.0.
   * `Lower.tail`: a Boolean value with default set to TRUE. cdf() computes P[X&lt;=q] when lower.tail=TRUE and it computes P[X&gt;q] when lower.tail=FALSE. In other words, a complement of the cumulative distribution is computed when lower.tail=FALSE.
 
-
-##### `q = icdf(target=p, dist=fn, ...)`
+```
+`q = icdf(target=p, dist=fn, ...)`
+```
 
 This computes the inverse cumulative probability i.e., it computes a quantile q such that the given probability p = P[X&lt;=q], where X is random variable whose distribution is specified via string argument fn.
 
@@ -2019,6 +2023,49 @@ The following example uses <code>transformapply()</code> with the input matrix a
     2.000 2.000 1.000 2.000 2.500 1.000 1.000 1.000 892.000
     2.000 2.000 1.000 2.000 2.500 2.000 2.000 1.000 889.000
     4.000 1.000 1.000 3.000 1.500 1.000 1.000 1.000 628.000
+
+### Processing Frames
+
+The built-in function <code>map()</code> provides support for the lambda expressions.
+
+**Table F5**: Frame map built-in function
+
+Function | Description | Parameters | Example
+-------- | ----------- | ---------- | -------
+map() | It will execute the given lambda expression on a frame.| Input: (X &lt;frame&gt;, y &lt;String&gt;) <br/>Output: &lt;frame&gt;. <br/> X is a frame and <br/>y is a String containing the lambda expression to be executed on frame X. | X = read("file1", data_type="frame", rows=2, cols=3, format="binary") <br/> y = "lambda expression" <br/> Z = map(X, y) <br/> # Dimensions of Z = Dimensions of X; <br/> example: <br/> <code> Z = map(X, "x -> x.charAt(2)")     </code>
+
+Example let X = 
+
+    # FRAME: nrow = 10, ncol = 1
+    # C1 
+    # STRING 
+      west
+      south
+      north
+      east
+      south
+      north
+      north
+      west
+      west
+      east
+
+<code> Z = map(X, "x -> x.toUpperCase()") <br/> 
+print(toString(Z)) </code>
+
+    # FRAME: nrow = 10, ncol = 1 
+    # C1 
+    # STRING 
+      WEST
+      SOUTH
+      NORTH
+      EAST
+      SOUTH
+      NORTH
+      NORTH
+      WEST
+      WEST
+      EAST
 
 
 * * *

@@ -258,12 +258,9 @@ public class DMLTranslator
 		// Step 1: construct hops for all functions
 		if( inclFuns ) {
 			// for each namespace, handle function program blocks
-			for (String namespaceKey : dmlp.getNamespaces().keySet()){
-				for (String fname: dmlp.getFunctionStatementBlocks(namespaceKey).keySet()) {
-					FunctionStatementBlock current = dmlp.getFunctionStatementBlock(namespaceKey, fname);
-					constructHops(current);
-				}
-			}
+			for( FunctionDictionary<FunctionStatementBlock> fdict : dmlp.getNamespaces().values() )
+				for( FunctionStatementBlock fsb : fdict.getFunctions().values() )
+					constructHops(fsb);
 		}
 		
 		// Step 2: construct hops for main program
@@ -326,10 +323,16 @@ public class DMLTranslator
 	}
 	
 	public void constructLops(DMLProgram dmlp) {
-		// for each namespace, handle function program blocks handle function 
-		for( String namespaceKey : dmlp.getNamespaces().keySet() )
-			for( FunctionStatementBlock fsb : dmlp.getFunctionStatementBlocks(namespaceKey).values() )
+		// for each namespace, handle function program blocks
+		for( FunctionDictionary<FunctionStatementBlock> fdict : dmlp.getNamespaces().values() ) {
+			//handle optimized functions
+			for( FunctionStatementBlock fsb : fdict.getFunctions().values() )
 				constructLops(fsb);
+			//handle unoptimized functions
+			if( fdict.getFunctions(false) != null )
+				for( FunctionStatementBlock fsb : fdict.getFunctions(false).values() )
+					constructLops(fsb);
+		}
 		
 		// handle regular program blocks
 		for( StatementBlock sb : dmlp.getStatementBlocks() )
@@ -422,7 +425,7 @@ public class DMLTranslator
 			for (Hop hop : sb.getHops())
 				lops.add(hop.constructLops());
 			sb.setLops(lops);
-			ret |= sb.updateRecompilationFlag(); 
+			ret |= sb.updateRecompilationFlag();
 		}
 		
 		return ret;
@@ -431,7 +434,7 @@ public class DMLTranslator
 	
 	public Program getRuntimeProgram(DMLProgram prog, DMLConfig config) 
 		throws LanguageException, DMLRuntimeException, LopsException, HopsException 
-	{	
+	{
 		// constructor resets the set of registered functions
 		Program rtprog = new Program(prog);
 		
@@ -441,16 +444,17 @@ public class DMLTranslator
 			for (String fname : prog.getFunctionStatementBlocks(namespace).keySet()){
 				// add program block to program
 				FunctionStatementBlock fsb = prog.getFunctionStatementBlocks(namespace).get(fname);
-				FunctionProgramBlock rtpb = (FunctionProgramBlock)createRuntimeProgramBlock(rtprog, fsb, config);
-				rtprog.addFunctionProgramBlock(namespace, fname, rtpb);
-				rtpb.setRecompileOnce( fsb.isRecompileOnce() );
-				rtpb.setNondeterministic(fsb.isNondeterministic());
+				prepareAndAddFunctionProgramBlock(rtprog, config, namespace, fname, fsb, true);
+				// add unoptimized block to program (for second-order calls)
+				if( prog.getNamespaces().get(namespace).containsFunction(fname, false) ) {
+					prepareAndAddFunctionProgramBlock(rtprog, config, namespace, fname,
+						prog.getNamespaces().get(namespace).getFunction(fname, false), false);
+				}
 			}
 		}
 		
 		// translate all top-level statement blocks to program blocks
 		for (StatementBlock sb : prog.getStatementBlocks() ) {
-		
 			// add program block to program
 			ProgramBlock rtpb = createRuntimeProgramBlock(rtprog, sb, config);
 			rtprog.addProgramBlock(rtpb);
@@ -463,6 +467,15 @@ public class DMLTranslator
 		}
 		
 		return rtprog ;
+	}
+	
+	private void prepareAndAddFunctionProgramBlock(Program rtprog, DMLConfig config,
+		String fnamespace, String fname, FunctionStatementBlock fsb, boolean opt)
+	{
+		FunctionProgramBlock rtpb = (FunctionProgramBlock)createRuntimeProgramBlock(rtprog, fsb, config);
+		rtprog.addFunctionProgramBlock(fnamespace, fname, rtpb, opt);
+		rtpb.setRecompileOnce(fsb.isRecompileOnce());
+		rtpb.setNondeterministic(fsb.isNondeterministic());
 	}
 	
 	public ProgramBlock createRuntimeProgramBlock(Program prog, StatementBlock sb, DMLConfig config) {
@@ -630,7 +643,7 @@ public class DMLTranslator
 			rtpb = new FunctionProgramBlock(prog, fstmt.getInputParams(), fstmt.getOutputParams());
 			
 			// process the function statement body
-			for (StatementBlock sblock : fstmt.getBody()){	
+			for (StatementBlock sblock : fstmt.getBody()){
 				// process the body
 				ProgramBlock childBlock = createRuntimeProgramBlock(prog, sblock, config);
 				rtpb.addProgramBlock(childBlock);
@@ -1042,7 +1055,9 @@ public class DMLTranslator
 						// write output in binary block format
 						ae.setOutputParams(ae.getDim1(), ae.getDim2(), ae.getNnz(), ae.getUpdateType(), ConfigurationManager.getBlocksize());
 						break;
-						
+					case FEDERATED:
+						ae.setOutputParams(ae.getDim1(), ae.getDim2(), -1, ae.getUpdateType(), -1);
+						break;
 						default:
 							throw new LanguageException("Unrecognized file format: " + ae.getInputFormatType());
 					}
@@ -1561,16 +1576,27 @@ public class DMLTranslator
 			} 
 			else if (source instanceof DataIdentifier)
 				return hops.get(((DataIdentifier) source).getName());
+			else if (source instanceof ExpressionList){
+				ExpressionList sourceList = (ExpressionList) source;
+				List<Expression> expressions = sourceList.getValue();
+				Hop[] listHops = new Hop[expressions.size()];
+				int idx = 0;
+				for( Expression ex : expressions){
+					listHops[idx++] = processExpression(ex, null, hops);
+				}
+				Hop currBuiltinOp = HopRewriteUtils.createNary(OpOpN.LIST,listHops );
+				return currBuiltinOp;
+			}
+			else{
+				throw new ParseException("Unhandled instance of source type: " + source.getClass());
+			}
 		} 
-		catch ( Exception e ) {
-			//print exception stacktrace for fatal exceptions w/o messages 
-			//to allow for error analysis other than ('no parse issue message')
-			if( e.getMessage() == null )
-				e.printStackTrace();
-			throw new ParseException(e.getMessage());
+		catch(ParseException e ){
+			throw e;
 		}
-		
-		return null;
+		catch ( Exception e ) {
+			throw new ParseException("An Parsing exception occured", e);
+		}
 	}
 
 	private static DataIdentifier createTarget(Expression source) {
@@ -1787,6 +1813,10 @@ public class DMLTranslator
 				// (we support only matrices of value type double)
 				target.setDataType(DataType.MATRIX);
 				target.setValueType(ValueType.FP64);
+			}
+			else if(left.getDataType() == DataType.FRAME || right.getDataType() == DataType.FRAME) {
+				target.setDataType(DataType.FRAME);
+				target.setValueType(ValueType.BOOLEAN);
 			}
 			else {
 				// Added to support scalar relational comparison
@@ -2207,7 +2237,10 @@ public class DMLTranslator
 	 */
 	private Hop processBuiltinFunctionExpression(BuiltinFunctionExpression source, DataIdentifier target,
 			HashMap<String, Hop> hops) {
-		Hop expr = processExpression(source.getFirstExpr(), null, hops);
+		Hop expr = null;
+		if(source.getFirstExpr() != null){
+			expr = processExpression(source.getFirstExpr(), null, hops);
+		}
 		Hop expr2 = null;
 		if (source.getSecondExpr() != null) {
 			expr2 = processExpression(source.getSecondExpr(), null, hops);
@@ -2505,6 +2538,7 @@ public class DMLTranslator
 			break;
 		case DROP_INVALID_TYPE:
 		case DROP_INVALID_LENGTH:
+		case MAP:
 			currBuiltinOp = new BinaryOp(target.getName(), target.getDataType(),
 				target.getValueType(), OpOp2.valueOf(source.getOpCode().name()), expr, expr2);
 			break;
@@ -2625,8 +2659,9 @@ public class DMLTranslator
 		case CHOLESKY:
 		case TYPEOF:
 		case DETECTSCHEMA:
-			currBuiltinOp = new UnaryOp(target.getName(), target.getDataType(), target.getValueType(),
-				OpOp1.valueOf(source.getOpCode().name()), expr);
+		case COLNAMES:
+			currBuiltinOp = new UnaryOp(target.getName(), target.getDataType(),
+				target.getValueType(), OpOp1.valueOf(source.getOpCode().name()), expr);
 			break;
 			
 		case OUTER:

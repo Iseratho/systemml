@@ -17,17 +17,15 @@
  * specific language governing permissions and limitations
  * under the License.
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 	<parent>
 		<groupId>org.apache</groupId>
 		<artifactId>apache</artifactId>
 		<version>18</version>
 	</parent>
-	<groupId>org.apache.sysds</groupId>
-	<version>2.0.0-SNAPSHOT</version>
+	<groupId>org.apache.systemds</groupId>
+	<version>2.1.0-SNAPSHOT</version>
 	<artifactId>systemds</artifactId>
 	<packaging>jar</packaging>
 	<name>SystemDS</name>
@@ -51,8 +49,11 @@
 		<jcuda.scope>provided</jcuda.scope>
 		<jcuda.version>10.2.0</jcuda.version>
 		<!-->Testing settings<!-->
-		<skipTests>true</skipTests>
+		<maven.test.skip>true</maven.test.skip>
+		<jacoco.skip>true</jacoco.skip>
+		<automatedtestbase.outputbuffering>false</automatedtestbase.outputbuffering>
 		<argLine>-Xms4g -Xmx4g -Xmn400m</argLine>
+		<enableStats>false</enableStats>
 	</properties>
 
 	<repositories>
@@ -67,7 +68,8 @@
 
 	<scm>
 		<developerConnection>scm:git:https://github.com/apache/systemds.git</developerConnection>
-	</scm>
+	  <tag>HEAD</tag>
+  </scm>
 
 	<build>
 		<!-- Adds scripts to main jar, in-memory jar, sources jar, and standalone jar -->
@@ -176,8 +178,8 @@
 					</execution>
 				</executions>
 				<configuration>
-					<!-- Include signature files so that recent versions of Java will run 
-						the resulting jar without complaining about "Invalid signature file digest 
+					<!-- Include signature files so that recent versions of Java will run
+						the resulting jar without complaining about "Invalid signature file digest
 						for Manifest main attributes".
 						Furthermore, the excluded notice and license files will be explicitly
 						added by the resource transformers above -->
@@ -250,13 +252,13 @@
 				</executions>
 			</plugin>
 
-			
+
 			<plugin> <!-- unit tests -->
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>3.0.0-M4</version><!--$NO-MVN-MAN-VER$ -->
 				<configuration>
-					<skipTests>${skipTests}</skipTests>
+					<skipTests>${maven.test.skip}</skipTests>
 					<parallel>classes</parallel>
 					<!-- <useUnlimitedThreads>true</useUnlimitedThreads> -->
 					<threadCount>12</threadCount>
@@ -265,6 +267,7 @@
 					<reuseForks>false</reuseForks>
 					<reportFormat>brief</reportFormat>
 					<trimStackTrace>true</trimStackTrace>
+					<rerunFailingTestsCount>2</rerunFailingTestsCount>
 				</configuration>
 			</plugin>
 
@@ -292,7 +295,7 @@
 					<execution>
 						<!-- remove antlr tokens files during initialize phase so antlr4 -->
 						<!-- plugin can regenerate them during generate-sources phase -->
-						<id>remove-antlr-tokens-files</id>
+						<!-- <id>remove-antlr-tokens-files</id>
 						<phase>initialize</phase>
 						<goals>
 							<goal>clean</goal>
@@ -306,7 +309,7 @@
 									</includes>
 								</fileset>
 							</filesets>
-						</configuration>
+						</configuration> -->
 					</execution>
 				</executions>
 			</plugin>
@@ -354,6 +357,33 @@
 				<groupId>org.eluder.coveralls</groupId>
 				<artifactId>coveralls-maven-plugin</artifactId>
 				<version>4.3.0</version>
+			</plugin>
+
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<version>3.2.0</version>
+				<configuration>
+					<quiet>true</quiet>
+					<skip>true</skip>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>properties-maven-plugin</artifactId>
+				<version>1.0.0</version>
+				<executions>
+					<execution>
+						<phase>generate-resources</phase>
+						<goals>
+							<goal>write-project-properties</goal>
+						</goals>
+						<configuration>
+							<outputFile>${project.build.testOutputDirectory}/my.properties</outputFile>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>
@@ -508,8 +538,10 @@
 								<exclude>.classpath</exclude>
 								<exclude>.project</exclude>
 								<exclude>src/main/python/docs/build/**/*</exclude>
+								<exclude>src/main/python/docs/source/_build/**</exclude>
 								<exclude>docs/api/**/*</exclude>
 								<exclude>docs/_site/**/*</exclude>
+								<exclude>docs/site/run_issues.md</exclude>
 								<exclude>docs/.jekyll-cache/**/*</exclude>
 								<exclude>docs/css/bootstrap.min.css</exclude>
 								<exclude>docs/css/pygments-default.css</exclude>
@@ -562,16 +594,7 @@
 		</profile>
 
 		<profile>
-			<!-- Can be used to ignore doclint javadoc issues -->
-			<id>ignore-doclint</id>
-			<!-- <activation> <jdk>[1.8,)</jdk> </activation> -->
-			<properties>
-				<javadoc.opts>-Xdoclint:none</javadoc.opts>
-			</properties>
-		</profile>
-
-		<profile>
-			<!-- Profile to create binary distributions. Execute with `mvn clean package 
+			<!-- Profile to create binary distributions. Execute with `mvn clean package
 				-P distribution` -->
 			<id>distribution</id>
 			<build>
@@ -670,9 +693,15 @@
 					<plugin>
 						<groupId>org.apache.maven.plugins</groupId>
 						<artifactId>maven-javadoc-plugin</artifactId>
-						<version>3.1.1</version>
+						<version>3.2.0</version>
 						<configuration>
-							<excludePackageNames>org.apache.systeds.protobuf.*</excludePackageNames>
+							<!-- https://maven.apache.org/plugins/maven-javadoc-plugin/javadoc-mojo.html -->
+							<excludePackageNames>*.protobuf</excludePackageNames>
+							<notimestamp>true</notimestamp>
+							<failOnWarnings>true</failOnWarnings>
+							<quiet>true</quiet>
+							<skip>false</skip>
+							<show>public</show>
 						</configuration>
 						<executions>
 							<execution>
@@ -702,7 +731,7 @@
 			</build>
 		</profile>
 	</profiles>
-	
+
 	<dependencies>
 		<dependency>
 			<groupId>org.jcuda</groupId>
@@ -710,12 +739,12 @@
 			<version>${jcuda.version}</version>
 			<scope>${jcuda.scope}</scope>
 			<exclusions>
-	        	<exclusion>
-	        		<!-- always exclude recursive fetching of native libraries -->
-	          		<groupId>org.jcuda</groupId>
+				<exclusion>
+					<!-- always exclude recursive fetching of native libraries -->
+			  		<groupId>org.jcuda</groupId>
 					<artifactId>jcuda-natives</artifactId>
-	        	</exclusion>
-	      	</exclusions>
+				</exclusion>
+		  	</exclusions>
 		</dependency>
 
 		<dependency>
@@ -724,12 +753,12 @@
 			<version>${jcuda.version}</version>
 			<scope>${jcuda.scope}</scope>
 			<exclusions>
-	        	<exclusion>
-	        		<!-- always exclude recursive fetching of native libraries -->
-	          		<groupId>org.jcuda</groupId>
+				<exclusion>
+					<!-- always exclude recursive fetching of native libraries -->
+			  		<groupId>org.jcuda</groupId>
 					<artifactId>jcublas-natives</artifactId>
-	        	</exclusion>
-	      	</exclusions>
+				</exclusion>
+		  	</exclusions>
 		</dependency>
 
 		<dependency>
@@ -738,12 +767,12 @@
 			<version>${jcuda.version}</version>
 			<scope>${jcuda.scope}</scope>
 			<exclusions>
-	        	<exclusion>
-	        		<!-- always exclude recursive fetching of native libraries -->
-	          		<groupId>org.jcuda</groupId>
+				<exclusion>
+					<!-- always exclude recursive fetching of native libraries -->
+			  		<groupId>org.jcuda</groupId>
 					<artifactId>jcusparse-natives</artifactId>
-	        	</exclusion>
-	      	</exclusions>
+				</exclusion>
+		  	</exclusions>
 		</dependency>
 
 		<dependency>
@@ -752,12 +781,12 @@
 			<version>${jcuda.version}</version>
 			<scope>${jcuda.scope}</scope>
 			<exclusions>
-	        	<exclusion>
-	        		<!-- always exclude recursive fetching of native libraries -->
-	          		<groupId>org.jcuda</groupId>
+				<exclusion>
+					<!-- always exclude recursive fetching of native libraries -->
+			  		<groupId>org.jcuda</groupId>
 					<artifactId>jcusolver-natives</artifactId>
-	        	</exclusion>
-	      	</exclusions>
+				</exclusion>
+		  	</exclusions>
 		</dependency>
 
 		<dependency>
@@ -766,12 +795,12 @@
 			<version>${jcuda.version}</version>
 			<scope>${jcuda.scope}</scope>
 			<exclusions>
-	        	<exclusion>
-	        		<!-- always exclude recursive fetching of native libraries -->
-	          		<groupId>org.jcuda</groupId>
+				<exclusion>
+					<!-- always exclude recursive fetching of native libraries -->
+			  		<groupId>org.jcuda</groupId>
 					<artifactId>jcudnn-natives</artifactId>
-	        	</exclusion>
-	      	</exclusions>
+				</exclusion>
+		  	</exclusions>
 		</dependency>
 
 		<!-- for all platforms, to be included in the extra jar -->
@@ -950,6 +979,12 @@
 		</dependency>
 
 		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+			<version>2.6.5</version>
+		</dependency>
+
+		<dependency>
 			<groupId>junit</groupId>
 			<artifactId>junit</artifactId>
 			<version>4.11</version>
@@ -962,19 +997,13 @@
 			<version>0.10</version>
 			<scope>test</scope>
 		</dependency>
-		
+
 		<dependency>
 			<!--Used for annotations in tests to execute tests in thread safe manner-->
 			<groupId>com.github.stephenc.jcip</groupId>
 			<artifactId>jcip-annotations</artifactId>
 			<version>1.0-1</version>
 			<scope>test</scope>
-		</dependency>
-
-		<dependency>
-			<groupId>commons-collections</groupId>
-			<artifactId>commons-collections</artifactId>
-			<version>3.2.1</version>
 		</dependency>
 
 		<!-- fast java compiler for codegen, consistent version w/ spark -->
@@ -1028,7 +1057,7 @@
 		<dependency>
 			<groupId>org.apache.maven.plugins</groupId>
 			<artifactId>maven-javadoc-plugin</artifactId>
-			<version>3.1.1</version>
+			<version>3.2.0</version>
 		</dependency>
 
 		<!-- https://mvnrepository.com/artifact/org.apache.maven.plugins/maven-gpg-plugin -->

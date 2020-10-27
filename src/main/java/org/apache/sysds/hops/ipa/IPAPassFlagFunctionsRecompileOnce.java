@@ -19,10 +19,14 @@
 
 package org.apache.sysds.hops.ipa;
 
+import java.util.Map;
+import java.util.Map.Entry;
+
 import org.apache.sysds.conf.ConfigurationManager;
 import org.apache.sysds.hops.HopsException;
 import org.apache.sysds.parser.DMLProgram;
 import org.apache.sysds.parser.ForStatementBlock;
+import org.apache.sysds.parser.FunctionDictionary;
 import org.apache.sysds.parser.FunctionStatement;
 import org.apache.sysds.parser.FunctionStatementBlock;
 import org.apache.sysds.parser.IfStatement;
@@ -49,29 +53,36 @@ public class IPAPassFlagFunctionsRecompileOnce extends IPAPass
 	}
 	
 	@Override
-	public void rewriteProgram( DMLProgram prog, FunctionCallGraph fgraph, FunctionCallSizeInfo fcallSizes ) 
+	public boolean rewriteProgram( DMLProgram prog, FunctionCallGraph fgraph, FunctionCallSizeInfo fcallSizes ) 
 	{
 		if( !ConfigurationManager.isDynamicRecompilation() )
-			return;
+			return false;
 		
 		try {
-			for (String namespaceKey : prog.getNamespaces().keySet())
-				for (String fname : prog.getFunctionStatementBlocks(namespaceKey).keySet())
-				{
-					FunctionStatementBlock fsblock = prog.getFunctionStatementBlock(namespaceKey,fname);
-					if( !fgraph.isRecursiveFunction(namespaceKey, fname) &&
-						rFlagFunctionForRecompileOnce( fsblock, false ) ) 
-					{
-						fsblock.setRecompileOnce( true ); 
-						if( LOG.isDebugEnabled() )
-							LOG.debug("IPA: FUNC flagged for recompile-once: " + 
-								DMLProgram.constructFunctionKey(namespaceKey, fname));
+			// flag applicable functions for recompile-once, note that this IPA pass
+			// is applied to both 'optimized' and 'unoptimized' functions because this
+			// pass is safe wrt correctness, and crucial for performance of mini-batch
+			// algorithms in parameter servers that internally call 'unoptimized' functions
+			for( Entry<String,FunctionDictionary<FunctionStatementBlock>> e : prog.getNamespaces().entrySet() ) 
+				for( boolean opt : new boolean[]{true, false} ) { //optimized/unoptimized
+					Map<String, FunctionStatementBlock> map = e.getValue().getFunctions(opt);
+					if( map == null ) continue;
+					for(Entry<String,FunctionStatementBlock> ef: map.entrySet() ) {
+						FunctionStatementBlock fsblock = ef.getValue();
+						if( !fgraph.isRecursiveFunction(e.getKey(), ef.getKey()) &&
+							rFlagFunctionForRecompileOnce( fsblock, false ) ) {
+							fsblock.setRecompileOnce( true );
+							if( LOG.isDebugEnabled() )
+								LOG.debug("IPA: FUNC flagged for recompile-once: " +
+									DMLProgram.constructFunctionKey(e.getKey(), ef.getKey()));
+						}
 					}
 				}
 		}
 		catch( LanguageException ex ) {
 			throw new HopsException(ex);
 		}
+		return false;
 	}
 	
 	/**
@@ -90,7 +101,7 @@ public class IPAPassFlagFunctionsRecompileOnce extends IPAPass
 			FunctionStatementBlock fsb = (FunctionStatementBlock)sb;
 			FunctionStatement fstmt = (FunctionStatement)fsb.getStatement(0);
 			for( StatementBlock c : fstmt.getBody() )
-				ret |= rFlagFunctionForRecompileOnce( c, inLoop );			
+				ret |= rFlagFunctionForRecompileOnce( c, inLoop );
 		}
 		else if (sb instanceof WhileStatementBlock) {
 			//recompilation information not available at this point

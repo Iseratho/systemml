@@ -50,7 +50,7 @@ public class Builtin extends ValueFunction
 	public enum BuiltinCode { SIN, COS, TAN, SINH, COSH, TANH, ASIN, ACOS, ATAN, LOG, LOG_NZ, MIN,
 		MAX, ABS, SIGN, SQRT, EXP, PLOGP, PRINT, PRINTF, NROW, NCOL, LENGTH, LINEAGE, ROUND, MAXINDEX, MININDEX,
 		STOP, CEIL, FLOOR, CUMSUM, CUMPROD, CUMMIN, CUMMAX, CUMSUMPROD, INVERSE, SPROP, SIGMOID, EVAL, LIST,
-		TYPEOF, DETECTSCHEMA, ISNA, ISNAN, ISINF, DROP_INVALID_TYPE, DROP_INVALID_LENGTH,
+		TYPEOF, DETECTSCHEMA, ISNA, ISNAN, ISINF, DROP_INVALID_TYPE, DROP_INVALID_LENGTH, MAP,
 		COUNT_DISTINCT, COUNT_DISTINCT_APPROX}
 
 
@@ -107,6 +107,7 @@ public class Builtin extends ValueFunction
 		String2BuiltinCode.put( "isinf", BuiltinCode.ISINF);
 		String2BuiltinCode.put( "dropInvalidType", BuiltinCode.DROP_INVALID_TYPE);
 		String2BuiltinCode.put( "dropInvalidLength", BuiltinCode.DROP_INVALID_LENGTH);
+		String2BuiltinCode.put( "_map", BuiltinCode.MAP);
 	}
 	
 	private Builtin(BuiltinCode bf) {
@@ -287,5 +288,10 @@ public class Builtin extends ValueFunction
 		default:
 			throw new DMLRuntimeException("Builtin.execute(): Unknown operation: " + bFunc);
 		}
+	}
+
+	@Override
+	public String toString(){
+		return "Builtin:" + bFunc;
 	}
 }

@@ -19,6 +19,13 @@
 
 package org.apache.sysds.runtime.controlprogram.caching;
 
+import java.io.File;
+import java.io.IOException;
+import java.lang.ref.SoftReference;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.apache.commons.lang.mutable.MutableBoolean;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -32,33 +39,26 @@ import org.apache.sysds.conf.ConfigurationManager;
 import org.apache.sysds.hops.OptimizerUtils;
 import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.controlprogram.caching.LazyWriteBuffer.RPolicy;
-import org.apache.sysds.runtime.controlprogram.federated.FederatedData;
-import org.apache.sysds.runtime.controlprogram.federated.FederatedRange;
+import org.apache.sysds.runtime.controlprogram.federated.FederationMap;
+import org.apache.sysds.runtime.controlprogram.federated.FederationMap.FType;
 import org.apache.sysds.runtime.controlprogram.parfor.stat.InfrastructureAnalyzer;
 import org.apache.sysds.runtime.controlprogram.parfor.util.IDSequence;
 import org.apache.sysds.runtime.instructions.cp.Data;
+import org.apache.sysds.runtime.instructions.fed.InitFEDInstruction;
 import org.apache.sysds.runtime.instructions.gpu.context.GPUContext;
 import org.apache.sysds.runtime.instructions.gpu.context.GPUObject;
 import org.apache.sysds.runtime.instructions.spark.data.BroadcastObject;
 import org.apache.sysds.runtime.instructions.spark.data.RDDObject;
 import org.apache.sysds.runtime.io.FileFormatProperties;
 import org.apache.sysds.runtime.io.IOUtilFunctions;
+import org.apache.sysds.runtime.io.ReaderWriterFederated;
 import org.apache.sysds.runtime.meta.DataCharacteristics;
 import org.apache.sysds.runtime.meta.MatrixCharacteristics;
 import org.apache.sysds.runtime.meta.MetaData;
 import org.apache.sysds.runtime.meta.MetaDataFormat;
-import org.apache.sysds.runtime.privacy.CheckedConstraintsLog;
-import org.apache.sysds.runtime.privacy.PrivacyConstraint;
 import org.apache.sysds.runtime.util.HDFSTool;
 import org.apache.sysds.runtime.util.LocalFileUtils;
 import org.apache.sysds.utils.Statistics;
-
-import java.io.File;
-import java.io.IOException;
-import java.lang.ref.SoftReference;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 
 /**
@@ -164,14 +164,8 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 	 * must get the OutputInfo that matches with InputInfo stored inside _mtd.
 	 */
 	protected MetaData _metaData = null;
-
-	/**
-	 * Object holding all privacy constraints associated with the cacheable data. 
-	 */
-	protected PrivacyConstraint _privacyConstraint = null;
 	
-	protected Map<FederatedRange, FederatedData> _fedMapping = null;
-	
+	protected FederationMap _fedMapping = null;
 	
 	/** The name of HDFS file in which the data is backed up. */
 	protected String _hdfsFileName = null; // file name and path
@@ -233,6 +227,7 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 		_hdfsFileName = that._hdfsFileName;
 		_hdfsFileExists = that._hdfsFileExists; 
 		_gpuObjects = that._gpuObjects;
+		_privacyConstraint = that._privacyConstraint;
 	}
 
 	
@@ -320,21 +315,19 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 	public void removeMetaData() {
 		_metaData = null;
 	}
-
-	public void setPrivacyConstraints(PrivacyConstraint pc) {
-		_privacyConstraint = pc;
-		if ( DMLScript.CHECK_PRIVACY && pc != null )
-			CheckedConstraintsLog.addLoadedConstraint(pc.getPrivacyLevel());
-	}
-
-	public PrivacyConstraint getPrivacyConstraint() {
-		return _privacyConstraint;
-	}
 	
 	public DataCharacteristics getDataCharacteristics() {
 		return _metaData.getDataCharacteristics();
 	}
 
+	public long getNumRows() {
+		return getDataCharacteristics().getRows();
+	}
+
+	public long getNumColumns() {
+		return getDataCharacteristics().getCols();
+	}
+	
 	public abstract void refreshMetaData();
 
 	/**
@@ -342,14 +335,25 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 	 * @return true if federated else false
 	 */
 	public boolean isFederated() {
+		if(_fedMapping == null && _metaData instanceof MetaDataFormat){
+			MetaDataFormat mdf = (MetaDataFormat) _metaData;
+			if(mdf.getFileFormat() == FileFormat.FEDERATED){
+				InitFEDInstruction.federateMatrix(this, ReaderWriterFederated.read(_hdfsFileName, mdf.getDataCharacteristics()));
+				return true;
+			}
+		}
 		return _fedMapping != null;
+	}
+	
+	public boolean isFederated(FType type) {
+		return isFederated() && _fedMapping.getType() == type;
 	}
 	
 	/**
 	 * Gets the mapping of indices ranges to federated objects.
 	 * @return fedMapping mapping
 	 */
-	public Map<FederatedRange, FederatedData> getFedMapping() {
+	public FederationMap getFedMapping() {
 		return _fedMapping;
 	}
 	
@@ -357,7 +361,7 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 	 * Sets the mapping of indices ranges to federated objects.
 	 * @param fedMapping mapping
 	 */
-	public void setFedMapping(Map<FederatedRange, FederatedData> fedMapping) {
+	public void setFedMapping(FederationMap fedMapping) {
 		_fedMapping = fedMapping;
 	}
 	
@@ -477,10 +481,16 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 		//(probe data for cache_nowrite / jvm_reuse)
 		if( _data==null && isEmpty(true) ) {
 			try {
-				if( DMLScript.STATISTICS )
-					CacheStatistics.incrementHDFSHits();
-				
-				if( getRDDHandle()==null || getRDDHandle().allowsShortCircuitRead() ) {
+				if( isFederated() ) {
+					_data = readBlobFromFederated( _fedMapping );
+					
+					//mark for initial local write despite read operation
+					_requiresLocalWrite = CACHING_WRITE_CACHE_ON_READ;
+				}
+				else if( getRDDHandle()==null || getRDDHandle().allowsShortCircuitRead() ) {
+					if( DMLScript.STATISTICS )
+						CacheStatistics.incrementHDFSHits();
+					
 					//check filename
 					if( _hdfsFileName == null )
 						throw new DMLRuntimeException("Cannot read matrix for empty filename.");
@@ -634,6 +644,10 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 		}
 	}
 	
+	public void clearData() {
+		clearData(-1);
+	}
+	
 	/**
 	 * Sets the cache block reference to <code>null</code>, abandons the old block.
 	 * Makes the "envelope" empty.  Run it to finalize the object (otherwise the
@@ -642,8 +656,10 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 	 * In-Status:  EMPTY, EVICTABLE, EVICTED;
 	 * Out-Status: EMPTY.
 	 * 
+	 * @param tid thread ID
+	 * 
 	 */
-	public synchronized void clearData() 
+	public synchronized void clearData(long tid) 
 	{
 		// check if cleanup enabled and possible 
 		if( !isCleanupEnabled() ) 
@@ -671,6 +687,10 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 				if (gObj != null)
 					gObj.clearData(null, DMLScript.EAGER_CUDA_FREE);
 		}
+		
+		//clear federated matrix
+		if( _fedMapping != null )
+			_fedMapping.execCleanup(tid, _fedMapping.getID());
 		
 		// change object state EMPTY
 		setDirty(false);
@@ -758,7 +778,7 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 			new Path(_hdfsFileName), new Path(fName));
 		
 		//actual export (note: no direct transfer of local copy in order to ensure blocking (and hence, parallelism))
-		if( isDirty() || !eqScheme ||
+		if( isDirty() || !eqScheme || isFederated() ||
 			(pWrite && !isEqualOutputFormat(outputFormat)) ) 
 		{
 			// CASE 1: dirty in-mem matrix or pWrite w/ different format (write matrix to fname; load into memory if evicted)
@@ -771,13 +791,15 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 				{
 					if( getRDDHandle()==null || getRDDHandle().allowsShortCircuitRead() )
 						_data = readBlobFromHDFS( _hdfsFileName );
-					else
+					else if( getRDDHandle() != null )
 						_data = readBlobFromRDD( getRDDHandle(), new MutableBoolean() );
+					else 
+						_data = readBlobFromFederated( getFedMapping() );
+					
 					setDirty(false);
 				}
-				catch (IOException e)
-				{
-				    throw new DMLRuntimeException("Reading of " + _hdfsFileName + " ("+hashCode()+") failed.", e);
+				catch (IOException e) {
+					throw new DMLRuntimeException("Reading of " + _hdfsFileName + " ("+hashCode()+") failed.", e);
 				}
 			}
 			//get object from cache
@@ -907,7 +929,8 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 			LOG.trace("CACHE: Freeing evicted matrix...  " + hashCode() + "  HDFS path: " + 
 				(_hdfsFileName == null ? "null" : _hdfsFileName) + " Eviction path: " + cacheFilePathAndName);
 		
-		LazyWriteBuffer.deleteBlock(cacheFilePathAndName);
+		if(isCachingActive())
+			LazyWriteBuffer.deleteBlock(cacheFilePathAndName);
 		
 		if( LOG.isTraceEnabled() )
 			LOG.trace("Freeing evicted matrix - COMPLETED ... " + (System.currentTimeMillis()-begin) + " msec.");
@@ -934,17 +957,28 @@ public abstract class CacheableData<T extends CacheBlock> extends Data
 		return hashCode() + " " + debugNameEnding;
 	}
 
-	protected T readBlobFromHDFS(String fname) 
-		throws IOException 
-	{
+	//HDFS read
+	protected T readBlobFromHDFS(String fname) throws IOException {
 		MetaDataFormat iimd = (MetaDataFormat) _metaData;
 		DataCharacteristics dc = iimd.getDataCharacteristics();
 		return readBlobFromHDFS(fname, dc.getDims());
 	}
 
-	protected abstract T readBlobFromHDFS(String fname, long[] dims) throws IOException;
+	protected abstract T readBlobFromHDFS(String fname, long[] dims)
+		throws IOException;
 
+	//RDD read
 	protected abstract T readBlobFromRDD(RDDObject rdd, MutableBoolean status)
+		throws IOException;
+
+	// Federated read
+	protected T readBlobFromFederated(FederationMap fedMap) throws IOException {
+		MetaDataFormat iimd = (MetaDataFormat) _metaData;
+		DataCharacteristics dc = iimd.getDataCharacteristics();
+		return readBlobFromFederated(fedMap, dc.getDims());
+	}
+	
+	protected abstract T readBlobFromFederated(FederationMap fedMap, long[] dims)
 		throws IOException;
 
 	protected abstract void writeBlobToHDFS(String fname, String ofmt, int rep, FileFormatProperties fprop)

@@ -33,6 +33,7 @@ import java.util.Scanner;
 
 import org.apache.commons.cli.AlreadySelectedException;
 import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
@@ -58,6 +59,7 @@ import org.apache.sysds.runtime.controlprogram.caching.CacheableData;
 import org.apache.sysds.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysds.runtime.controlprogram.context.ExecutionContextFactory;
 import org.apache.sysds.runtime.controlprogram.context.SparkExecutionContext;
+import org.apache.sysds.runtime.controlprogram.federated.FederatedData;
 import org.apache.sysds.runtime.controlprogram.federated.FederatedWorker;
 import org.apache.sysds.runtime.controlprogram.parfor.stat.InfrastructureAnalyzer;
 import org.apache.sysds.runtime.controlprogram.parfor.util.IDHandler;
@@ -148,21 +150,23 @@ public class DMLScript
 	}
 
 	/**
+	 * Main entry point for systemDS dml script execution
 	 *
 	 * @param args command-line arguments
-	 * @throws IOException if an IOException occurs in the hadoop GenericOptionsParser
 	 */
 	public static void main(String[] args)
-		throws IOException
 	{
-		Configuration conf = new Configuration(ConfigurationManager.getCachedJobConf());
-		String[] otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs();
-		try {
+		try{
+			Configuration conf = new Configuration(ConfigurationManager.getCachedJobConf());
+			String[] otherArgs = new GenericOptionsParser(conf, args).getRemainingArgs();
 			DMLScript.executeScript(conf, otherArgs);
-		}
-		catch (ParseException | DMLScriptException e) {
-			// In case of DMLScriptException, simply print the error message.
-			System.err.println(e.getMessage());
+		} catch(Exception e){
+			errorPrint(e);
+			for(String s: args){
+				if(s.trim().contains("-debug")){
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 
@@ -173,19 +177,35 @@ public class DMLScript
 	 * @param conf Hadoop configuration
 	 * @param args arguments
 	 * @return true if success, false otherwise
+	 * @throws IOException If an internal IOException happens.
 	 */
-	@SuppressWarnings("null")
-	public static boolean executeScript( Configuration conf, String[] args ) {
+	public static boolean executeScript( Configuration conf, String[] args ) 
+		throws  IOException, ParseException, DMLScriptException
+	{
 		//parse arguments and set execution properties
 		ExecMode oldrtplatform  = EXEC_MODE;  //keep old rtplatform
 		ExplainType oldexplain  = EXPLAIN;     //keep old explain
 
 		DMLOptions dmlOptions = null;
 		
+		try{
+			dmlOptions = DMLOptions.parseCLArguments(args);
+		}
+		catch(AlreadySelectedException e) {
+			LOG.error("Mutually exclusive options were selected. " + e.getMessage());
+			HelpFormatter formatter = new HelpFormatter();
+			formatter.printHelp( "systemds", DMLOptions.defaultOptions.options );
+			return false;
+		}
+		catch(org.apache.commons.cli.ParseException e) {
+			LOG.error("Parsing Exception " + e.getMessage());
+			HelpFormatter formatter = new HelpFormatter();
+			formatter.printHelp( "systemds", DMLOptions.defaultOptions.options );
+			return false;
+		}
+
 		try
 		{
-			dmlOptions = DMLOptions.parseCLArguments(args);
-			
 			STATISTICS          = dmlOptions.stats;
 			STATISTICS_COUNT    = dmlOptions.statsCount;
 			JMLC_MEM_STATISTICS = dmlOptions.memStats;
@@ -217,6 +237,7 @@ public class DMLScript
 			}
 			
 			if (dmlOptions.fedWorker) {
+				loadConfiguration(fnameOptConfig);
 				new FederatedWorker(dmlOptions.fedWorkerPort).run();
 				return true;
 			}
@@ -232,24 +253,6 @@ public class DMLScript
 			//Step 3: invoke dml script
 			printInvocationInfo(fileOrScript, fnameOptConfig, argVals);
 			execute(dmlScriptStr, fnameOptConfig, argVals, args);
-		}
-		catch(AlreadySelectedException e) {
-			System.err.println("Mutually exclusive options were selected. " + e.getMessage());
-			HelpFormatter formatter = new HelpFormatter();
-			formatter.printHelp( "systemds", dmlOptions.options );
-			return false;
-		}
-		catch(org.apache.commons.cli.ParseException e) {
-			System.err.println(e.getMessage());
-			HelpFormatter formatter = new HelpFormatter();
-			formatter.printHelp( "systemds", dmlOptions.options );
-		}
-		catch (ParseException | DMLScriptException e) {
-			throw e;
-		}
-		catch(Exception ex) {
-			LOG.error("Failed to execute DML script.", ex);
-			throw new DMLException(ex);
 		}
 		finally {
 			//reset runtime platform and visualize flag
@@ -334,6 +337,15 @@ public class DMLScript
 	// (core compilation and execute)
 	////////
 
+	private static void loadConfiguration(String fnameOptConfig) throws IOException {
+		DMLConfig dmlconf = DMLConfig.readConfigurationFile(fnameOptConfig);
+		ConfigurationManager.setGlobalConfig(dmlconf);
+		CompilerConfig cconf = OptimizerUtils.constructCompilerConfig(dmlconf);
+		ConfigurationManager.setGlobalConfig(cconf);
+		LOG.debug("\nDML config: \n" + dmlconf.getConfigInfo());
+		setGlobalFlags(dmlconf);
+	}
+
 	/**
 	 * The running body of DMLScript execution. This method should be called after execution properties have been correctly set,
 	 * and customized parameters have been put into _argVals
@@ -351,13 +363,7 @@ public class DMLScript
 		printStartExecInfo( dmlScriptStr );
 		
 		//Step 1: parse configuration files & write any configuration specific global variables
-		DMLConfig dmlconf = DMLConfig.readConfigurationFile(fnameOptConfig);
-		ConfigurationManager.setGlobalConfig(dmlconf);
-		CompilerConfig cconf = OptimizerUtils.constructCompilerConfig(dmlconf);
-		ConfigurationManager.setGlobalConfig(cconf);
-		LOG.debug("\nDML config: \n" + dmlconf.getConfigInfo());
-		
-		setGlobalFlags(dmlconf);
+		loadConfiguration(fnameOptConfig);
 		
 		//Step 3: parse dml script
 		Statistics.startCompileTimer();
@@ -371,7 +377,7 @@ public class DMLScript
 		dmlt.constructHops(prog);
 		
 		//init working directories (before usage by following compilation steps)
-		initHadoopExecution( dmlconf );
+		initHadoopExecution( ConfigurationManager.getDMLConfig() );
 	
 		//Step 5: rewrite HOP DAGs (incl IPA and memory estimates)
 		dmlt.rewriteHopsDAG(prog);
@@ -380,7 +386,7 @@ public class DMLScript
 		dmlt.constructLops(prog);
 		
 		//Step 7: generate runtime program, incl codegen
-		Program rtprog = dmlt.getRuntimeProgram(prog, dmlconf);
+		Program rtprog = dmlt.getRuntimeProgram(prog, ConfigurationManager.getDMLConfig());
 		
 		//Step 9: prepare statistics [and optional explain output]
 		//count number compiled MR jobs / SP instructions	
@@ -400,14 +406,14 @@ public class DMLScript
 		ExecutionContext ec = null;
 		try {
 			ec = ExecutionContextFactory.createContext(rtprog);
-			ScriptExecutorUtils.executeRuntimeProgram(rtprog, ec, dmlconf, STATISTICS ? STATISTICS_COUNT : 0, null);
+			ScriptExecutorUtils.executeRuntimeProgram(rtprog, ec, ConfigurationManager.getDMLConfig(), STATISTICS ? STATISTICS_COUNT : 0, null);
 		}
 		finally {
 			if(ec != null && ec instanceof SparkExecutionContext)
 				((SparkExecutionContext) ec).close();
 			LOG.info("END DML run " + getDateTime() );
 			//cleanup scratch_space and all working dirs
-			cleanupHadoopExecution( dmlconf );
+			cleanupHadoopExecution( ConfigurationManager.getDMLConfig());
 		}
 	}
 	
@@ -485,6 +491,9 @@ public class DMLScript
 		sb.append(DMLScript.getUUID());
 		String dirSuffix = sb.toString();
 		
+		//0) cleanup federated workers if necessary
+		FederatedData.clearFederatedWorkers();
+		
 		//1) cleanup scratch space (everything for current uuid) 
 		//(required otherwise export to hdfs would skip assumed unnecessary writes if same name)
 		HDFSTool.deleteFileIfExistOnHDFS( config.getTextValue(DMLConfig.SCRATCH_SPACE) + dirSuffix );
@@ -547,5 +556,32 @@ public class DMLScript
 	
 	public static void setGlobalExecMode(ExecMode mode) {
 		EXEC_MODE = mode;
+	}
+
+	/**
+	 * Print the error in a user friendly manner.
+	 * 
+	 * @param e The exception thrown.
+	 */
+	public static void errorPrint(Exception e){
+		final String ANSI_RED = "\u001B[31m";
+		final String ANSI_RESET = "\u001B[0m";
+		StringBuilder sb = new StringBuilder();
+		sb.append(ANSI_RED + "\n");
+		sb.append("An Error Occured : ");
+		sb.append("\n" );
+		sb.append(StringUtils.leftPad(e.getClass().getSimpleName(),25));
+		sb.append(" -- ");
+		sb.append(e.getMessage());
+		Throwable s =  e.getCause();
+		while(s != null){
+			sb.append("\n" );
+			sb.append(StringUtils.leftPad(s.getClass().getSimpleName(),25));
+			sb.append(" -- ");
+			sb.append(s.getMessage());
+			s = s.getCause();
+		}
+		sb.append("\n" + ANSI_RESET);
+		System.out.println(sb.toString());
 	}
 }

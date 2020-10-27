@@ -23,22 +23,19 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-import org.junit.Test;
 import org.apache.sysds.hops.recompile.Recompiler;
 import org.apache.sysds.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysds.runtime.instructions.cp.Data;
 import org.apache.sysds.runtime.lineage.Lineage;
-import org.apache.sysds.runtime.lineage.LineageItem;
-import org.apache.sysds.runtime.lineage.LineageItemUtils;
-import org.apache.sysds.runtime.lineage.LineageParser;
+import org.apache.sysds.runtime.lineage.LineageRecomputeUtils;
 import org.apache.sysds.runtime.matrix.data.MatrixBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixValue.CellIndex;
-import org.apache.sysds.test.AutomatedTestBase;
 import org.apache.sysds.test.TestConfiguration;
 import org.apache.sysds.test.TestUtils;
+import org.junit.Test;
 
 @net.jcip.annotations.NotThreadSafe
-public class LineageTraceParforTest extends AutomatedTestBase {
+public class LineageTraceParforTest extends LineageBase {
 	
 	protected static final String TEST_DIR = "functions/lineage/";
 	protected static final String TEST_NAME1 = "LineageTraceParfor1"; //rand - matrix result - local parfor
@@ -144,7 +141,7 @@ public class LineageTraceParforTest extends AutomatedTestBase {
 	
 	private void testLineageTraceParFor(int ncol, String testname) {
 		try {
-			System.out.println("------------ BEGIN " + testname + "------------");
+			LOG.debug("------------ BEGIN " + testname + "------------");
 			
 			getAndLoadTestConfiguration(testname);
 			List<String> proArgs = new ArrayList<>();
@@ -163,8 +160,7 @@ public class LineageTraceParforTest extends AutomatedTestBase {
 			
 			//get lineage and generate program
 			String Rtrace = readDMLLineageFromHDFS("R");
-			LineageItem R = LineageParser.parseLineageTrace(Rtrace);
-			Data ret = LineageItemUtils.computeByLineage(R);
+			Data ret = LineageRecomputeUtils.parseNComputeLineageTrace(Rtrace, null);
 
 			HashMap<CellIndex, Double> dmlfile = readDMLMatrixFromHDFS("R");
 			MatrixBlock tmp = ((MatrixObject) ret).acquireReadAndRelease();

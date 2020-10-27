@@ -30,19 +30,18 @@ import java.util.concurrent.Future;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.sysds.runtime.DMLRuntimeException;
+import org.apache.sysds.runtime.compress.CompressionSettings;
 import org.apache.sysds.runtime.compress.estim.CompressedSizeEstimator;
 import org.apache.sysds.runtime.compress.estim.CompressedSizeInfo;
 import org.apache.sysds.runtime.compress.estim.CompressedSizeInfoColGroup;
 import org.apache.sysds.runtime.util.CommonThreadPool;
 
 public class PlanningCoCoder {
-	// internal configurations
-	private final static PartitionerType COLUMN_PARTITIONER = PartitionerType.BIN_PACKING;
 
 	private static final Log LOG = LogFactory.getLog(PlanningCoCoder.class.getName());
 
 	public enum PartitionerType {
-		BIN_PACKING, STATIC,
+		BIN_PACKING, STATIC, COST,
 	}
 
 	/**
@@ -54,10 +53,11 @@ public class PlanningCoCoder {
 	 * @param colInfos      The information already gathered on the individual ColGroups of columns.
 	 * @param numRows       The number of rows in the input matrix.
 	 * @param k             The concurrency degree allowed for this operation.
+	 * @param cs            The Compression Settings used in the compression.
 	 * @return The Estimated (hopefully) best groups of ColGroups.
 	 */
-	public static List<int[]> findCocodesByPartitioning(CompressedSizeEstimator sizeEstimator,
-		CompressedSizeInfo colInfos, int numRows, int k) {
+	public static List<int[]> findCoCodesByPartitioning(CompressedSizeEstimator sizeEstimator,
+		CompressedSizeInfo colInfos, int numRows, int k, CompressionSettings cs) {
 		// filtering out non-group-able columns as singleton groups
 		// weight is the ratio of its cardinality to the number of rows
 
@@ -69,14 +69,19 @@ public class PlanningCoCoder {
 		HashMap<Integer, GroupableColInfo> groupColsInfo = new HashMap<>();
 		for(int i = 0; i < numCols; i++) {
 			int colIx = cols.get(i);
-			double cardinality = colGroups[colIx].getEstCard();
-			double weight = cardinality / numRows;
+			int cardinality = colGroups[colIx].getEstCard();
+			double weight = ((double)cardinality) / numRows;
 			groupCols.add(colIx);
-			groupColsInfo.put(colIx, new GroupableColInfo(weight, colGroups[colIx].getMinSize()));
+			groupColsInfo.put(colIx, new GroupableColInfo(weight, colGroups[colIx].getMinSize(), cardinality));
 		}
 
 		// use column group partitioner to create partitions of columns
-		List<int[]> bins = createColumnGroupPartitioner(COLUMN_PARTITIONER).partitionColumns(groupCols, groupColsInfo);
+		List<int[]> bins = createColumnGroupPartitioner(cs.columnPartitioner)
+			.partitionColumns(groupCols, groupColsInfo, cs);
+		
+		if (cs.columnPartitioner == PartitionerType.COST){
+			return bins;
+		}
 
 		// brute force grouping within each partition
 		return (k > 1) ? getCocodingGroupsBruteForce(bins,
@@ -209,6 +214,8 @@ public class PlanningCoCoder {
 			case STATIC:
 				return new ColumnGroupPartitionerStatic();
 
+			case COST:
+				return new ColumnGroupPartitionerCost();
 			default:
 				throw new RuntimeException("Unsupported column group partitioner: " + type.toString());
 		}
@@ -217,10 +224,12 @@ public class PlanningCoCoder {
 	public static class GroupableColInfo {
 		public final double cardRatio;
 		public final long size;
+		public final int nrDistinct;
 
-		public GroupableColInfo(double lcardRatio, long lsize) {
+		public GroupableColInfo(double lcardRatio, long lsize, int cardinality) {
 			cardRatio = lcardRatio;
 			size = lsize;
+			nrDistinct = cardinality;
 		}
 	}
 

@@ -71,6 +71,10 @@ public class LineageItem {
 	public LineageItem(long id, LineageItem li) {
 		this(id, li._data, li._opcode, li._inputs);
 	}
+
+	public LineageItem(long id, String data, String opcode) {
+		this(id, data, opcode, null);
+	}
 	
 	public LineageItem(long id, String data, String opcode, LineageItem[] inputs) {
 		_id = id;
@@ -116,7 +120,7 @@ public class LineageItem {
 	}
 	
 	public LineageItemType getType() {
-		if (_opcode.equals(dedupItemOpcode))
+		if (_opcode.startsWith(dedupItemOpcode))
 			return LineageItemType.Dedup;
 		if (isLeaf() && isInstruction())
 			return LineageItemType.Creation;
@@ -189,6 +193,10 @@ public class LineageItem {
 	
 	public boolean isInstruction() {
 		return !_opcode.isEmpty();
+	}
+	
+	public boolean isDedup() {
+		return _opcode.startsWith(dedupItemOpcode);
 	}
 	
 	/**

@@ -57,9 +57,9 @@
 		<fileSet>
 			<directory>${basedir}/bin</directory>
 			<includes>
-				<include>*.sh</include>
+				<include>systemds</include>
 			</includes>
-			<outputDirectory>.</outputDirectory>
+      <outputDirectory>bin</outputDirectory>
 			<fileMode>0755</fileMode>
 		</fileSet>
 
@@ -114,6 +114,10 @@
 		<file>
 			<source>target/${artifactId}-${project.version}-extra.jar</source>
 			<outputDirectory>./lib/</outputDirectory>
+		</file>
+		<file>
+			<source>target/${artifactId}-${project.version}.jar</source>
+			<outputDirectory>.</outputDirectory>
 		</file>
 		<file>
 			<source>${basedir}/conf/log4j.properties.template</source>

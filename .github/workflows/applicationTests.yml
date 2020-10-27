@@ -35,12 +35,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tests: [A,B,C,G,H,I,L,M,N,O,P,S,U,W]
+        tests: [A,B,C,E,G,H,I,L,M,N,O,P,S,U,W]
         os: [ubuntu-latest]
     name:  Ap Test ${{ matrix.tests }} 
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v2
+
+    - name: Cache Maven Dependencies
+      uses: actions/cache@v1
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-test-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-test-
 
     - name: Run all tests starting with "${{ matrix.tests }}"
       uses: ./.github/action/

@@ -44,27 +44,14 @@ jobs:
       uses: actions/cache@v1
       with:
         path: ~/.m2/repository
-        key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+        key: ${{ runner.os }}-maven-test-${{ hashFiles('**/pom.xml') }}
         restore-keys: |
-          ${{ runner.os }}-maven-
-
-    - name: Maven clean compile & test-compile
-      run: mvn clean compile test-compile
+          ${{ runner.os }}-maven-test-
 
     - name: Component Tests
-      run: |
-        log="/tmp/sysdstest.log"
-        echo "Starting Tests"
-        mvn surefire:test -DskipTests=false -Dtest=org.apache.sysds.test.component.*.** 2>&1 > $log
-        grep_args="SUCCESS"
-        grepvals="$( tail -n 100 $log | grep $grep_args)"
-        if [[ $grepvals == *"SUCCESS"* ]]; then
-        	echo "--------------------- last 100 lines from test ------------------------"
-        	tail -n 100 $log
-        	echo "------------------ last 100 lines from test end -----------------------"
-        	exit 0
-        else
-        	echo "\n $(cat $log)"
-        	exit 1
-        fi
+      run: ./docker/entrypoint.sh org.apache.sysds.test.component.**
+    
+    - name: User Tests
+      run: ./docker/entrypoint.sh org.apache.sysds.test.usertest.** 
+
 

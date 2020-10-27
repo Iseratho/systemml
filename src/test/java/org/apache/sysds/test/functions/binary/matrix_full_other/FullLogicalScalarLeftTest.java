@@ -271,6 +271,7 @@ public class FullLogicalScalarLeftTest extends AutomatedTestBase
 			writeInputMatrixWithMTD("A", A, true);
 
 			//run tests
+			
 			runTest(true, false, null, -1);
 			runRScript(true);
 

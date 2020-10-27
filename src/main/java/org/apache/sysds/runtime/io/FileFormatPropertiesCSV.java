@@ -20,18 +20,23 @@
 package org.apache.sysds.runtime.io;
 
 import java.io.Serializable;
+import java.util.HashSet;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.sysds.parser.DataExpression;
+import org.apache.sysds.runtime.util.UtilFunctions;
 
 public class FileFormatPropertiesCSV extends FileFormatProperties implements Serializable
 {
+	protected static final Log LOG = LogFactory.getLog(FileFormatPropertiesCSV.class.getName());
 	private static final long serialVersionUID = -2870393360885401604L;
 	
 	private boolean header;
 	private String delim;
 	private boolean fill;
 	private double fillValue;
-	private String naStrings;
+	private HashSet<String> naStrings;
 	
 	private boolean sparse;
 	
@@ -42,21 +47,36 @@ public class FileFormatPropertiesCSV extends FileFormatProperties implements Ser
 		this.fill = DataExpression.DEFAULT_DELIM_FILL;
 		this.fillValue = DataExpression.DEFAULT_DELIM_FILL_VALUE;
 		this.sparse = DataExpression.DEFAULT_DELIM_SPARSE;
-		this.naStrings = null;
+		this.naStrings = UtilFunctions.defaultNaString;
+		if(LOG.isDebugEnabled())
+			LOG.debug("FileFormatPropertiesCSV: " + this.toString());
+		
 	}
 	
 	public FileFormatPropertiesCSV(boolean hasHeader, String delim, boolean fill, double fillValue, String naStrings) {
+		this();
 		this.header = hasHeader;
 		this.delim = delim;
 		this.fill = fill;
 		this.fillValue = fillValue;
-		this.naStrings = naStrings;
+
+		this.naStrings = new HashSet<>();
+		for(String s: naStrings.split(DataExpression.DELIM_NA_STRING_SEP)){
+			this.naStrings.add(s);
+		}
+		if(LOG.isDebugEnabled())
+			LOG.debug("FileFormatPropertiesCSV full settings: " + this.toString());
 	}
 
 	public FileFormatPropertiesCSV(boolean hasHeader, String delim, boolean sparse) {
+		this();
 		this.header = hasHeader;
 		this.delim = delim;
 		this.sparse = sparse;
+		this.naStrings = UtilFunctions.defaultNaString;
+		if(LOG.isDebugEnabled()){
+			LOG.debug("FileFormatPropertiesCSV medium settings: " + this.toString());
+		}
 	}
 
 	public boolean hasHeader() {
@@ -70,8 +90,12 @@ public class FileFormatPropertiesCSV extends FileFormatProperties implements Ser
 	public String getDelim() {
 		return delim;
 	}
-	
-	public String getNAStrings() { 
+
+	public void setNAStrings(HashSet<String> naStrings) {
+		this.naStrings = naStrings;
+	}
+
+	public HashSet<String> getNAStrings() { 
 		return naStrings;
 	}
 
@@ -101,5 +125,16 @@ public class FileFormatPropertiesCSV extends FileFormatProperties implements Ser
 
 	public void setSparse(boolean sparse) {
 		this.sparse = sparse;
+	}
+
+	@Override
+	public String toString(){
+		StringBuilder sb = new StringBuilder();
+		sb.append("header " +header);
+		sb.append(" delim " + delim);
+		sb.append(" fill " + fill);
+		sb.append(" fillValue " + fillValue);
+		sb.append(" naStrings " + naStrings);
+		return sb.toString();
 	}
 }

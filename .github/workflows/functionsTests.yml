@@ -38,6 +38,7 @@ jobs:
         tests: [
           aggregate,
           append,
+          binary.frame,
           binary.matrix,
           binary.matrix_full_cellwise,
           binary.matrix_full_other,
@@ -49,12 +50,16 @@ jobs:
           codegen,
           codegenalg.partone,
           codegenalg.parttwo,
+          compress,
           countDistinct,
           data.misc,
           data.rand,
           data.tensor,
           dnn,
-          federated,
+          federated.algorithms,
+          federated.primitives,
+          federated.io,
+          federated.transform,
           frame,
           indexing,
           io,
@@ -64,10 +69,14 @@ jobs:
           mlcontext,
           nary,
           paramserv,
-          parfor,
+          parfor.misc,
+          parfor.partition,
+          pipelines,
+          privacy,
           quaternary,
           recompile,
           reorg,
+          rewrite,
           ternary,
           transform,
           unary.matrix,
@@ -80,6 +89,14 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v2
+
+    - name: Cache Maven Dependencies
+      uses: actions/cache@v1
+      with:
+        path: ~/.m2/repository
+        key: ${{ runner.os }}-maven-test-${{ hashFiles('**/pom.xml') }}
+        restore-keys: |
+          ${{ runner.os }}-maven-test-
 
     - name: Run all tests starting with "${{ matrix.tests }}"
       uses: ./.github/action/

@@ -246,6 +246,7 @@ public class LiteralOp extends Hop
 		switch( getValueType() ) {
 			case BOOLEAN:
 				return String.valueOf(value_boolean);
+			case UINT8:
 			case INT32:
 			case INT64:
 				return String.valueOf(value_long);
@@ -282,5 +283,10 @@ public class LiteralOp extends Hop
 	public boolean compare( Hop that )
 	{
 		return false;
+	}
+
+	@Override
+	public String toString(){
+		return getOpString();
 	}
 }

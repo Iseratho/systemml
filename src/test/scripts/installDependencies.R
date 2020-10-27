@@ -56,6 +56,8 @@ custom_install("sigmoid");
 custom_install("DescTools");
 custom_install("mice");
 custom_install("mclust");
+custom_install("dbscan");
+custom_install("imputeTS");
 
 print("Installation Done")
 

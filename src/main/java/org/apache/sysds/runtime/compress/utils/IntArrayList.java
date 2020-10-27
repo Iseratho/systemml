@@ -29,8 +29,8 @@ public class IntArrayList {
 	private static final int RESIZE_FACTOR = 2;
 
 	private int[] _data = null;
-	private int _size = -1;
-	private int _val0 = -1;
+	private int _size;
+	private int _val0;
 
 	public IntArrayList() {
 		_data = null;
@@ -40,6 +40,11 @@ public class IntArrayList {
 	public IntArrayList(int value) {
 		this();
 		appendValue(value);
+	}
+
+	public IntArrayList(int[] values){
+		_data = values;
+		_size = values.length;
 	}
 
 	public int size() {
@@ -93,5 +98,22 @@ public class IntArrayList {
 
 		// resize data array and copy existing contents
 		_data = Arrays.copyOf(_data, _data.length * RESIZE_FACTOR);
+	}
+
+	@Override
+	public String toString(){
+		StringBuilder sb = new StringBuilder();
+		
+		if(_size == 1){
+			sb.append(_val0);
+		} else{
+			sb.append("[");
+			int i = 0;
+			for(; i < _size-1; i++){
+				sb.append(_data[i] + ",");
+			}
+			sb.append(_data[i]+"]");
+		}
+		return sb.toString();
 	}
 }

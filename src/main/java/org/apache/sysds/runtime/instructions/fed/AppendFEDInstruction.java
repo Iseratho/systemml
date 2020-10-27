@@ -22,69 +22,90 @@ package org.apache.sysds.runtime.instructions.fed;
 import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysds.runtime.controlprogram.context.ExecutionContext;
-import org.apache.sysds.runtime.controlprogram.federated.LibFederatedAppend;
+import org.apache.sysds.runtime.controlprogram.federated.FederationMap;
+import org.apache.sysds.runtime.controlprogram.federated.FederationUtils;
 import org.apache.sysds.runtime.functionobjects.OffsetColumnIndex;
 import org.apache.sysds.runtime.instructions.InstructionUtils;
 import org.apache.sysds.runtime.instructions.cp.CPOperand;
 import org.apache.sysds.runtime.matrix.operators.Operator;
 import org.apache.sysds.runtime.matrix.operators.ReorgOperator;
+import org.apache.sysds.runtime.meta.DataCharacteristics;
 
 public class AppendFEDInstruction extends BinaryFEDInstruction {
-	public enum FEDAppendType {
-		CBIND, RBIND;
-		public boolean isCBind() {
-			return this == CBIND;
-		}
-	}
-	
-	protected final FEDAppendType _type;
-	
-	protected AppendFEDInstruction(Operator op, CPOperand in1, CPOperand in2, CPOperand out, FEDAppendType type,
-			String opcode, String istr) {
+	protected boolean _cbind; // otherwise rbind
+
+	protected AppendFEDInstruction(Operator op, CPOperand in1, CPOperand in2, CPOperand out, boolean cbind,
+		String opcode, String istr) {
 		super(FEDType.Append, op, in1, in2, out, opcode, istr);
-		_type = type;
+		_cbind = cbind;
 	}
-	
+
 	public static AppendFEDInstruction parseInstruction(String str) {
 		String[] parts = InstructionUtils.getInstructionPartsWithValueType(str);
-		InstructionUtils.checkNumFields(parts, 5, 4);
-		
+		InstructionUtils.checkNumFields(parts, 6, 5, 4);
+
 		String opcode = parts[0];
 		CPOperand in1 = new CPOperand(parts[1]);
 		CPOperand in2 = new CPOperand(parts[2]);
 		CPOperand out = new CPOperand(parts[parts.length - 2]);
 		boolean cbind = Boolean.parseBoolean(parts[parts.length - 1]);
-		
-		FEDAppendType type = cbind ? FEDAppendType.CBIND : FEDAppendType.RBIND;
-		
-		if (!opcode.equalsIgnoreCase("append") && !opcode.equalsIgnoreCase("remove") 
-			&& !opcode.equalsIgnoreCase("galignedappend"))
-			throw new DMLRuntimeException("Unknown opcode while parsing a AppendCPInstruction: " + str);
-		
+
 		Operator op = new ReorgOperator(OffsetColumnIndex.getOffsetColumnIndexFnObject(-1));
-		return new AppendFEDInstruction(op, in1, in2, out, type, opcode, str);
+		return new AppendFEDInstruction(op, in1, in2, out, cbind, opcode, str);
 	}
-	
+
 	@Override
 	public void processInstruction(ExecutionContext ec) {
-		//get inputs
-		MatrixObject matObject1 = ec.getMatrixObject(input1.getName());
-		MatrixObject matObject2 = ec.getMatrixObject(input2.getName());
-		//check input dimensions
-		if (_type == FEDAppendType.CBIND && matObject1.getNumRows() != matObject2.getNumRows()) {
-			throw new DMLRuntimeException(
-				"Append-cbind is not possible for federated input matrices " + input1.getName() + " and "
-				+ input2.getName() + " with different number of rows: " + matObject1.getNumRows() + " vs "
-				+ matObject2.getNumRows());
+		// get inputs
+		MatrixObject mo1 = ec.getMatrixObject(input1.getName());
+		MatrixObject mo2 = ec.getMatrixObject(input2.getName());
+		DataCharacteristics dc1 = mo1.getDataCharacteristics();
+		DataCharacteristics dc2 = mo1.getDataCharacteristics();
+
+		// check input dimensions
+		if(_cbind && mo1.getNumRows() != mo2.getNumRows()) {
+			StringBuilder sb = new StringBuilder();
+			sb.append("Append-cbind is not possible for federated input matrices ");
+			sb.append(input1.getName()).append(" and ").append(input2.getName());
+			sb.append(" with different number of rows: ");
+			sb.append(mo1.getNumRows()).append(" vs ").append(mo2.getNumRows());
+			throw new DMLRuntimeException(sb.toString());
 		}
-		else if (_type == FEDAppendType.RBIND && matObject1.getNumColumns() != matObject2.getNumColumns()) {
-			throw new DMLRuntimeException(
-				"Append-rbind is not possible for federated input matrices " + input1.getName() + " and "
-				+ input2.getName() + " with different number of columns: " + matObject1.getNumColumns()
-				+ " vs " + matObject2.getNumColumns());
+		else if(!_cbind && mo1.getNumColumns() != mo2.getNumColumns()) {
+			StringBuilder sb = new StringBuilder();
+			sb.append("Append-rbind is not possible for federated input matrices ");
+			sb.append(input1.getName()).append(" and ").append(input2.getName());
+			sb.append(" with different number of columns: ");
+			sb.append(mo1.getNumColumns()).append(" vs ").append(mo2.getNumColumns());
+			throw new DMLRuntimeException(sb.toString());
 		}
-		// append MatrixObjects
-		LibFederatedAppend.federateAppend(matObject1, matObject2,
-			ec.getMatrixObject(output.getName()), _type.isCBind());
+
+		FederationMap fm1;
+		if(mo1.isFederated())
+			fm1 = mo1.getFedMapping();
+		else
+			fm1 = FederationUtils.federateLocalData(mo1);
+		FederationMap fm2;
+		if(mo2.isFederated())
+			fm2 = mo2.getFedMapping();
+		else
+			fm2 = FederationUtils.federateLocalData(mo2);
+
+		MatrixObject out = ec.getMatrixObject(output);
+		long id = FederationUtils.getNextFedDataID();
+		if(_cbind) {
+			out.getDataCharacteristics().set(dc1.getRows(),
+				dc1.getCols() + dc2.getCols(),
+				dc1.getBlocksize(),
+				dc1.getNonZeros() + dc2.getNonZeros());
+			out.setFedMapping(fm1.identCopy(getTID(), id).bind(0, dc1.getCols(), fm2.identCopy(getTID(), id)));
+		}
+		else {
+			out.getDataCharacteristics().set(dc1.getRows() + dc2.getRows(),
+				dc1.getCols(),
+				dc1.getBlocksize(),
+				dc1.getNonZeros() + dc2.getNonZeros());
+			out.setFedMapping(fm1.identCopy(getTID(), id).bind(dc1.getRows(), 0, fm2.identCopy(getTID(), id)));
+		}
 	}
 }

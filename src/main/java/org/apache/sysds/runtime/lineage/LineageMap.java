@@ -72,13 +72,15 @@ public class LineageMap {
 		}
 	}
 	
-	public void processDedupItem(LineageMap lm, Long path) {
+	public void processDedupItem(LineageMap lm, Long path, LineageItem[] liinputs, String name) {
+		String delim = LineageDedupUtils.DEDUP_DELIM;
 		for (Map.Entry<String, LineageItem> entry : lm._traces.entrySet()) {
-			if (_traces.containsKey(entry.getKey())) {
-				addLineageItem(Pair.of(entry.getKey(),
-					new LineageItem(entry.getKey(), LineageItem.dedupItemOpcode,
-					new LineageItem[]{_traces.get(entry.getKey()), entry.getValue()})));
-			}
+			// Encode everything needed by the recomputation logic in the
+			// opcode to map this lineage item to the right patch.
+			String opcode = LineageItem.dedupItemOpcode + delim + entry.getKey()
+				+ delim + name + delim + path.toString();
+			LineageItem li = new LineageItem(opcode, liinputs);
+			addLineageItem(Pair.of(entry.getKey(), li));
 		}
 	}
 	
@@ -237,8 +239,8 @@ public class LineageMap {
 		String fName = ec.getScalarInput(input2.getName(), Types.ValueType.STRING, input2.isLiteral()).getStringValue();
 		
 		if (DMLScript.LINEAGE_DEDUP) {
-			LineageItemUtils.writeTraceToHDFS(Explain.explain(li), fName + ".lineage.dedup");
-			li = LineageItemUtils.rDecompress(li);
+			// gracefully serialize the dedup maps without decompressing
+			LineageItemUtils.writeTraceToHDFS(LineageDedupUtils.mergeExplainDedupBlocks(ec), fName + ".lineage.dedup");
 		}
 		LineageItemUtils.writeTraceToHDFS(Explain.explain(li), fName + ".lineage");
 	}

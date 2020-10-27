@@ -31,14 +31,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
 
-import org.apache.commons.collections.CollectionUtils;
 import org.apache.commons.lang.ArrayUtils;
-import org.apache.wink.json4j.JSONArray;
-import org.apache.wink.json4j.JSONException;
-import org.apache.wink.json4j.JSONObject;
 import org.apache.sysds.api.jmlc.Connection;
-import org.apache.sysds.lops.Lop;
 import org.apache.sysds.common.Types.ValueType;
+import org.apache.sysds.lops.Lop;
 import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.io.IOUtilFunctions;
 import org.apache.sysds.runtime.matrix.data.FrameBlock;
@@ -46,8 +42,12 @@ import org.apache.sysds.runtime.matrix.data.Pair;
 import org.apache.sysds.runtime.transform.TfUtils;
 import org.apache.sysds.runtime.transform.TfUtils.TfMethod;
 import org.apache.sysds.runtime.transform.decode.DecoderRecode;
+import org.apache.sysds.runtime.util.CollectionUtils;
 import org.apache.sysds.runtime.util.HDFSTool;
 import org.apache.sysds.runtime.util.UtilFunctions;
+import org.apache.wink.json4j.JSONArray;
+import org.apache.wink.json4j.JSONException;
+import org.apache.wink.json4j.JSONObject;
 
 public class TfMetaUtils 
 {
@@ -81,17 +81,33 @@ public class TfMetaUtils
 	
 	/**
 	 * TODO consolidate external and internal json spec definitions
-	 * 
+	 *
 	 * @param spec transform specification as json string
 	 * @param colnames column names
-	 * @param group ?
+	 * @param group attribute name in json class
 	 * @return list of column ids
 	 * @throws JSONException if JSONException occurs
 	 */
-	public static int[] parseJsonIDList(JSONObject spec, String[] colnames, String group) 
+	public static int[] parseJsonIDList(JSONObject spec, String[] colnames, String group)
+			throws JSONException
+	{
+		return parseJsonIDList(spec, colnames, group, -1, -1);
+	}
+	
+	/**
+	 * @param spec transform specification as json string
+	 * @param colnames column names
+	 * @param group attribute name in json class
+	 * @param minCol start of columns to ignore (1-based, inclusive, if -1 not used)
+	 * @param maxCol end of columns to ignore (1-based, exclusive, if -1 not used)
+	 * @return list of column ids
+	 * @throws JSONException if JSONException occurs
+	 */
+	public static int[] parseJsonIDList(JSONObject spec, String[] colnames, String group, int minCol, int maxCol)
 		throws JSONException
 	{
-		int[] colList = new int[0];
+		List<Integer> colList = new ArrayList<>();
+		int[] arr = new int[0];
 		boolean ids = spec.containsKey("ids") && spec.getBoolean("ids");
 		
 		if( spec.containsKey(group) ) {
@@ -105,50 +121,67 @@ public class TfMetaUtils
 				attrs = (JSONArray)spec.get(group);
 			
 			//construct ID list array
-			colList = new int[attrs.size()];
-			for(int i=0; i < colList.length; i++) {
-				colList[i] = ids ? UtilFunctions.toInt(attrs.get(i)) : 
-					(ArrayUtils.indexOf(colnames, attrs.get(i)) + 1);
-				if( colList[i] <= 0 ) {
-					throw new RuntimeException("Specified column '" + 
-						attrs.get(i)+"' does not exist.");
+			for(int i=0; i < attrs.length(); i++) {
+				int ix;
+				if (ids) {
+					ix = UtilFunctions.toInt(attrs.get(i));
+					if(maxCol != -1 && ix >= maxCol)
+						ix = -1;
+					if(minCol != -1 && ix >= 0)
+						ix -= minCol - 1;
 				}
-			}
-		
-			//ensure ascending order of column IDs
-			Arrays.sort(colList);
-		}
-		
-		return colList;
-	}
-
-	public static int[] parseJsonObjectIDList(JSONObject spec, String[] colnames, String group) 
-		throws JSONException
-	{
-		int[] colList = new int[0];
-		boolean ids = spec.containsKey("ids") && spec.getBoolean("ids");
-		
-		if( spec.containsKey(group) && spec.get(group) instanceof JSONArray )
-		{
-			JSONArray colspecs = (JSONArray)spec.get(group);
-			colList = new int[colspecs.size()];
-			for(int j=0; j<colspecs.size(); j++) {
-				JSONObject colspec = (JSONObject) colspecs.get(j);
-				colList[j] = ids ? colspec.getInt("id") : 
-					(ArrayUtils.indexOf(colnames, colspec.get("name")) + 1);
-				if( colList[j] <= 0 ) {
-					throw new RuntimeException("Specified column '" +
-						colspec.get(ids?"id":"name")+"' does not exist.");
+				else {
+					ix = ArrayUtils.indexOf(colnames, attrs.get(i)) + 1;
 				}
+				if(ix > 0)
+					colList.add(ix);
+				else if(minCol == -1 && maxCol == -1)
+					// only if we remove some columns, ix -1 is expected
+					throw new RuntimeException("Specified column '" + attrs.get(i) + "' does not exist.");
 			}
 			
 			//ensure ascending order of column IDs
-			Arrays.sort(colList);
+			arr = colList.stream().mapToInt((i) -> i)
+				.sorted().toArray();
 		}
-		
-		return colList;
+		return arr;
 	}
-	
+
+	public static int[] parseJsonObjectIDList(JSONObject spec, String[] colnames, String group, int minCol, int maxCol)
+		throws JSONException {
+		List<Integer> colList = new ArrayList<>();
+		int[] arr = new int[0];
+		boolean ids = spec.containsKey("ids") && spec.getBoolean("ids");
+
+		if(spec.containsKey(group) && spec.get(group) instanceof JSONArray) {
+			JSONArray colspecs = (JSONArray) spec.get(group);
+			for(Object o : colspecs) {
+				JSONObject colspec = (JSONObject) o;
+				int ix;
+				if(ids) {
+					ix = colspec.getInt("id");
+					if(maxCol != -1 && ix >= maxCol)
+						ix = -1;
+					if(minCol != -1 && ix >= 0)
+						ix -= minCol - 1;
+				}
+				else {
+					ix = ArrayUtils.indexOf(colnames, colspec.get("name")) + 1;
+				}
+				if(ix > 0)
+					colList.add(ix);
+				else if(minCol == -1 && maxCol == -1)
+					throw new RuntimeException(
+						"Specified column '" + colspec.get(ids ? "id" : "name") + "' does not exist.");
+			}
+
+			// ensure ascending order of column IDs
+			arr = colList.stream().mapToInt((i) -> i).sorted().toArray();
+		}
+
+		return arr;
+	}
+
 	/**
 	 * Reads transform meta data from an HDFS file path and converts it into an in-memory
 	 * FrameBlock object.
@@ -197,7 +230,7 @@ public class TfMetaUtils
 
 		//get list of recode ids
 		List<Integer> recodeIDs = parseRecodeColIDs(spec, colnames);
-		List<Integer> binIDs = parseBinningColIDs(spec, colnames);
+		List<Integer> binIDs = parseBinningColIDs(spec, colnames, -1, -1);
 		
 		//create frame block from in-memory strings
 		return convertToTransformMetaDataFrame(rows, colnames, recodeIDs, binIDs, meta, mvmeta);
@@ -252,7 +285,7 @@ public class TfMetaUtils
 		
 		//get list of recode ids
 		List<Integer> recodeIDs = parseRecodeColIDs(spec, colnames);
-		List<Integer> binIDs = parseBinningColIDs(spec, colnames);
+		List<Integer> binIDs = parseBinningColIDs(spec, colnames, -1, -1);
 		
 		//create frame block from in-memory strings
 		return convertToTransformMetaDataFrame(rows, colnames, recodeIDs, binIDs, meta, mvmeta);
@@ -305,8 +338,8 @@ public class TfMetaUtils
 			if( map == null )
 				throw new IOException("Binning map for column '"+name+"' (id="+colID+") not existing.");
 			String[] fields = map.split(TfUtils.TXMTD_SEP);
-			double min = UtilFunctions.parseToDouble(fields[1]);
-			double binwidth = UtilFunctions.parseToDouble(fields[3]);
+			double min = UtilFunctions.parseToDouble(fields[1], UtilFunctions.defaultNaString);
+			double binwidth = UtilFunctions.parseToDouble(fields[3], UtilFunctions.defaultNaString);
 			int nbins = UtilFunctions.parseToInt(fields[4]);
 			//materialize bins to support equi-width/equi-height
 			for( int i=0; i<nbins; i++ ) { 
@@ -336,7 +369,6 @@ public class TfMetaUtils
 	 * @return list of column ids
 	 * @throws IOException if IOException occurs
 	 */
-	@SuppressWarnings("unchecked")
 	private static List<Integer> parseRecodeColIDs(String spec, String[] colnames) 
 		throws IOException 
 	{	
@@ -352,7 +384,7 @@ public class TfMetaUtils
 					TfMetaUtils.parseJsonIDList(jSpec, colnames, TfMethod.RECODE.toString())));
 			List<Integer> dcIDs = Arrays.asList(ArrayUtils.toObject(
 					TfMetaUtils.parseJsonIDList(jSpec, colnames, TfMethod.DUMMYCODE.toString()))); 
-			specRecodeIDs = new ArrayList<Integer>(CollectionUtils.union(rcIDs, dcIDs));
+			specRecodeIDs = CollectionUtils.unionDistinct(rcIDs, dcIDs);
 		}
 		catch(Exception ex) {
 			throw new IOException(ex);
@@ -361,26 +393,26 @@ public class TfMetaUtils
 		return specRecodeIDs;
 	}
 
-	public static List<Integer> parseBinningColIDs(String spec, String[] colnames) 
+	public static List<Integer> parseBinningColIDs(String spec, String[] colnames, int minCol, int maxCol)
 		throws IOException 
 	{
 		try {
 			JSONObject jSpec = new JSONObject(spec);
-			return parseBinningColIDs(jSpec, colnames);
+			return parseBinningColIDs(jSpec, colnames, minCol, maxCol);
 		}
 		catch(JSONException ex) {
 			throw new IOException(ex);
 		}
 	}
 
-	public static List<Integer> parseBinningColIDs(JSONObject jSpec, String[] colnames) 
+	public static List<Integer> parseBinningColIDs(JSONObject jSpec, String[] colnames, int minCol, int maxCol)
 		throws IOException 
 	{
 		try {
 			String binKey = TfMethod.BIN.toString();
 			if( jSpec.containsKey(binKey) && jSpec.get(binKey) instanceof JSONArray ) {
 				return Arrays.asList(ArrayUtils.toObject(
-						TfMetaUtils.parseJsonObjectIDList(jSpec, colnames, binKey)));
+						TfMetaUtils.parseJsonObjectIDList(jSpec, colnames, binKey, minCol, maxCol)));
 			}
 			else { //internally generates
 				return Arrays.asList(ArrayUtils.toObject(

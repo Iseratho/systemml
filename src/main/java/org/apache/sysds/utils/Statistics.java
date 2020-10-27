@@ -34,9 +34,11 @@ import java.util.concurrent.atomic.LongAdder;
 
 import org.apache.sysds.api.DMLScript;
 import org.apache.sysds.conf.ConfigurationManager;
+import org.apache.sysds.conf.DMLConfig;
 import org.apache.sysds.hops.OptimizerUtils;
 import org.apache.sysds.runtime.controlprogram.caching.CacheStatistics;
 import org.apache.sysds.runtime.controlprogram.context.SparkExecutionContext;
+import org.apache.sysds.runtime.controlprogram.federated.FederatedRequest.RequestType;
 import org.apache.sysds.runtime.instructions.Instruction;
 import org.apache.sysds.runtime.instructions.InstructionUtils;
 import org.apache.sysds.runtime.instructions.cp.FunctionCallCPInstruction;
@@ -135,6 +137,13 @@ public class Statistics
 	private static final LongAdder lTotalLix = new LongAdder();
 	private static final LongAdder lTotalLixUIP = new LongAdder();
 	
+	// Federated stats
+	private static final LongAdder federatedReadCount = new LongAdder();
+	private static final LongAdder federatedPutCount = new LongAdder();
+	private static final LongAdder federatedGetCount = new LongAdder();
+	private static final LongAdder federatedExecuteInstructionCount = new LongAdder();
+	private static final LongAdder federatedExecuteUDFCount = new LongAdder();
+
 	private static LongAdder numNativeFailures = new LongAdder();
 	public static LongAdder numNativeLibMatrixMultCalls = new LongAdder();
 	public static LongAdder numNativeConv2dCalls = new LongAdder();
@@ -151,6 +160,8 @@ public class Statistics
 	public static long recomputeNNZTime = 0;
 	public static long examSparsityTime = 0;
 	public static long allocateDoubleArrTime = 0;
+
+	public static boolean allowWorkerStatistics = true;
 	
 	public static void incrementNativeFailuresCounter() {
 		numNativeFailures.increment();
@@ -376,6 +387,28 @@ public class Statistics
 		parforMergeTime += time;
 	}
 
+	public static synchronized void incFederated(RequestType rqt){
+		switch (rqt) {
+			case READ_VAR:
+				federatedReadCount.increment();
+				break;
+			case PUT_VAR:
+				federatedPutCount.increment();
+				break;
+			case GET_VAR:
+				federatedGetCount.increment();
+				break;
+			case EXEC_INST:
+				federatedExecuteInstructionCount.increment();
+				break;
+			case EXEC_UDF:
+				federatedExecuteUDFCount.increment();
+				break;
+			default:
+				break;
+		}
+	}
+
 	public static void startCompileTimer() {
 		if( DMLScript.STATISTICS )
 			compileStartTime = System.nanoTime();
@@ -471,6 +504,11 @@ public class Statistics
 		nativeConv2dBwdFilterTime = 0;
 		nativeConv2dBwdDataTime = 0;
 		LibMatrixDNN.resetStatistics();
+		federatedReadCount.reset();
+		federatedPutCount.reset();
+		federatedGetCount.reset();
+		federatedExecuteInstructionCount.reset();
+		federatedExecuteUDFCount.reset();
 	}
 
 	public static void resetJITCompileTime(){
@@ -557,21 +595,19 @@ public class Statistics
 	{
 		String opcode = null;
 		
-		if( inst instanceof SPInstruction )
-		{
+		if( inst instanceof SPInstruction ) {
 			opcode = "SP_"+InstructionUtils.getOpCode(inst.toString());
 			if( inst instanceof FunctionCallCPInstruction ) {
 				FunctionCallCPInstruction extfunct = (FunctionCallCPInstruction)inst;
 				opcode = extfunct.getFunctionName();
-			}	
+			}
 		}
-		else //CPInstructions
-		{
+		else { //CPInstructions
 			opcode = InstructionUtils.getOpCode(inst.toString());
 			if( inst instanceof FunctionCallCPInstruction ) {
 				FunctionCallCPInstruction extfunct = (FunctionCallCPInstruction)inst;
 				opcode = extfunct.getFunctionName();
-			}		
+			}
 		}
 		
 		return opcode;
@@ -990,6 +1026,19 @@ public class Statistics
 				sb.append("ParFor initialize time:\t\t" + String.format("%.3f", ((double)getParforInitTime())/1000) + " sec.\n");
 				sb.append("ParFor result merge time:\t" + String.format("%.3f", ((double)getParforMergeTime())/1000) + " sec.\n");
 				sb.append("ParFor total update in-place:\t" + lTotalUIPVar + "/" + lTotalLixUIP + "/" + lTotalLix + "\n");
+			}
+			if( federatedReadCount.longValue() > 0){
+				sb.append("Federated I/O (Read, Put, Get):\t" + 
+					federatedReadCount.longValue() + "/" +
+					federatedPutCount.longValue() + "/" +
+					federatedGetCount.longValue() + ".\n");
+				sb.append("Federated Execute (Inst, UDF):\t" +
+					federatedExecuteInstructionCount.longValue() + "/" +
+					federatedExecuteUDFCount.longValue() + ".\n");
+			}
+
+			if( ConfigurationManager.getDMLConfig().getTextValue(DMLConfig.COMPRESSED_LINALG).contains("true")){
+				DMLCompressionStatistics.display(sb);
 			}
 
 			sb.append("Total JIT compile time:\t\t" + ((double)getJITCompileTime())/1000 + " sec.\n");

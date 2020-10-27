@@ -77,11 +77,10 @@ if (!(blocking_method == "naive" | blocking_method == "lsh")) {
 # Read data
 FX = read(fileFX);
 if (use_embeddings) {
-  if (fileXE == "") {
+  if (fileXE == "")
     print("You need to specify file XE when use_embeddings is set to TRUE");
-  } else {
+  else
     X_embeddings = read(fileXE);
-  }
 }
 
 # Convert data
@@ -97,11 +96,10 @@ if (use_tokens & use_embeddings) {
 }
 
 if (store_mapping) {
-  if (fileMX == "") {
+  if (fileMX == "")
     print("You need to specify file MX when store_mapping is set to TRUE.");
-  } else {
+  else 
     write(MX, fileMX);
-  }
 }
 
 # Perform clustering

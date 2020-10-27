@@ -20,6 +20,9 @@
 package org.apache.sysds.test.functions.unary.scalar;
 
 import org.junit.Test;
+
+import static org.junit.Assert.assertTrue;
+
 import org.apache.sysds.test.AutomatedTestBase;
 import org.apache.sysds.test.TestConfiguration;
 
@@ -35,7 +38,7 @@ public class PrintTest extends AutomatedTestBase
 	
 	@Override
 	public void setUp() {
-		
+		setOutputBuffering(true);
 		addTestConfiguration("PrintTest", new TestConfiguration(TEST_CLASS_DIR, "PrintTest", new String[] {}));
 		addTestConfiguration("PrintTest2", new TestConfiguration(TEST_CLASS_DIR, "PrintTest2", new String[] {}));
 		addTestConfiguration("PrintTest3", new TestConfiguration(TEST_CLASS_DIR, "PrintTest3", new String[] {}));
@@ -50,8 +53,7 @@ public class PrintTest extends AutomatedTestBase
 
 		loadTestConfiguration(config);
 
-		setExpectedStdOut("X= " + value);
-		runTest();
+		assertTrue(bufferContainsString(runTest(), "X= " + value));
 	}
 	
 	@Test
@@ -62,9 +64,7 @@ public class PrintTest extends AutomatedTestBase
 		config.addVariable("value", value);
 
 		loadTestConfiguration(config);
-		
-		setExpectedStdOut("X= " + value);
-		runTest();
+		assertTrue(bufferContainsString(runTest(), "X= " + value));
 	}
 	
 	@Test
@@ -76,8 +76,7 @@ public class PrintTest extends AutomatedTestBase
 
 		loadTestConfiguration(config);
 
-		setExpectedStdOut("X= " + value);
-		runTest();
+		assertTrue(bufferContainsString(runTest(), "X= " + value));
 	}
 	
 	@Test
@@ -89,8 +88,7 @@ public class PrintTest extends AutomatedTestBase
 
 		loadTestConfiguration(config);
 
-		setExpectedStdOut("X= " + value.substring(1, value.length()-1));
-		runTest();
+		assertTrue(bufferContainsString(runTest(), "X= " + value.substring(1, value.length()-1)));
 	}
 	
 	@Test
@@ -102,8 +100,7 @@ public class PrintTest extends AutomatedTestBase
 
 		loadTestConfiguration(config);
 
-		setExpectedStdOut(value.substring(1, value.length()-1));
-		runTest();
+		assertTrue(bufferContainsString(runTest(), value.substring(1, value.length()-1)));
 	}
 
 	@Test
@@ -113,7 +110,7 @@ public class PrintTest extends AutomatedTestBase
 		loadTestConfiguration(config);
 
 		String value = "fooboo, 0.0";
-		setExpectedStdOut(value.substring(1, value.length()-1));
-		runTest();
+		
+		assertTrue(bufferContainsString(runTest(), value.substring(1, value.length()-1)));
 	}
 }

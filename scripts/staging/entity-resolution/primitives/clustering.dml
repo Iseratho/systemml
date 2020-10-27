@@ -141,6 +141,7 @@ dfs_iter = function(Matrix[Double] GRAPH, Integer start_vertex, Matrix[Double] m
 #                                      connected.
 # --------------------------------------------------------------------------------------------
 cluster_by_connected_components = function(Matrix[Double] ADJACENCY) return (Matrix[Double] COMPONENTS) {
+  #TODO could we reuse our components builtin?
   rows = nrow(ADJACENCY);
   marked = matrix(0, rows=rows, cols=1);
   id = matrix(0, rows=nrow(ADJACENCY), cols=1);
@@ -152,11 +153,6 @@ cluster_by_connected_components = function(Matrix[Double] ADJACENCY) return (Mat
       count = count + 1;
     }
   }
-  COMPONENTS = ADJACENCY;
-  for (s in 1:rows) {
-    c = as.scalar(id[s,]);
-    v = id == c;
-    COMPONENTS[,s] = v;
-  }
+  COMPONENTS = outer(id, t(id), "==");
   COMPONENTS = COMPONENTS - diag(diag(COMPONENTS));
 }

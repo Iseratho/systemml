@@ -674,7 +674,7 @@ public class LibMatrixReorg
 			if( rows )
 				ret.reset(lmax, in.rlen, true);
 			else //cols
-				ret.reset(in.rlen, lmax, true);	
+				ret.reset(in.rlen, lmax, true);
 			return ret;
 		}
 		
@@ -1057,16 +1057,27 @@ public class LibMatrixReorg
 		if( out.sparse  ) { //SPARSE
 			if( SPARSE_OUTPUTS_IN_CSR ) {
 				int[] rptr = new int[in.rlen+1];
-				int[] cix = new int[(int)in.nonZeros];
-				double[] vals = new double[(int)in.nonZeros];
-				for( int i=0, pos=0; i<rlen; i++ ) {
-					double val = in.quickGetValue(i, 0);
-					if( val != 0 ) {
-						cix[pos] = i;
-						vals[pos] = val;
-						pos++;
+				int[] cix = null;
+				double[] vals = null;
+				//case a: fully dense vector
+				if( rlen == in.nonZeros && !in.sparse ) {
+					//reuse single seq for rptr and cix (cix truncated by 1)
+					rptr = cix = UtilFunctions.getSeqArray(0, rlen, 1);
+					vals = in.getDenseBlockValues(); //shallow copy
+				}
+				//case b: more general input
+				else {
+					cix = new int[(int)in.nonZeros];
+					vals = new double[(int)in.nonZeros];
+					for( int i=0, pos=0; i<rlen; i++ ) {
+						double val = in.quickGetValue(i, 0);
+						if( val != 0 ) {
+							cix[pos] = i;
+							vals[pos] = val;
+							pos++;
+						}
+						rptr[i+1]=pos;
 					}
-					rptr[i+1]=pos;
 				}
 				out.sparseBlock = new SparseBlockCSR(
 					rptr, cix, vals, (int)in.nonZeros);
@@ -1994,10 +2005,11 @@ public class LibMatrixReorg
 				//handle invalid values if not to be ignored
 				if( !ignore && val<=0 )
 					throw new DMLRuntimeException("Invalid input value <= 0 for ignore=false: "+val);
-					
+				
 				//set expanded value if matching
+				//note: tmpi populated with i+j indexes, then sorted
 				if( val == Math.floor(val) && val >= 1 && val <= max )
-					ret.appendValue((int)(val-1), i+tmpi[j], 1);
+					ret.appendValue((int)(val-1), tmpi[j], 1);
 			}
 		}
 		

@@ -67,6 +67,7 @@ import org.apache.sysds.runtime.instructions.spark.CheckpointSPInstruction;
 import org.apache.sysds.runtime.instructions.spark.ReblockSPInstruction;
 import org.apache.sysds.runtime.instructions.spark.SPInstruction;
 import org.apache.sysds.runtime.lineage.LineageItem;
+import org.apache.sysds.runtime.lineage.LineageItemUtils;
 
 public class Explain
 {
@@ -271,13 +272,20 @@ public class Explain
 			}
 
 			//show individual functions
-			for( Entry<String, FunctionProgramBlock> e : funcMap.entrySet() )
-			{
+			for( Entry<String, FunctionProgramBlock> e : funcMap.entrySet() ) {
 				String fkey = e.getKey();
 				FunctionProgramBlock fpb = e.getValue();
+				//explain optimized function
 				sb.append("----FUNCTION "+fkey+" [recompile="+fpb.isRecompileOnce()+"]\n");
 				for( ProgramBlock pb : fpb.getChildBlocks() )
 					sb.append( explainProgramBlock(pb,3) );
+				//explain unoptimized function
+				if( rtprog.containsFunctionProgramBlock(fkey, false) ) {
+					FunctionProgramBlock fpb2 = rtprog.getFunctionProgramBlock(fkey, false);
+					sb.append("----FUNCTION "+fkey+" (unoptimized) [recompile="+fpb2.isRecompileOnce()+"]\n");
+					for( ProgramBlock pb : fpb2.getChildBlocks() )
+						sb.append( explainProgramBlock(pb,3) );
+				}
 			}
 		}
 
@@ -349,7 +357,7 @@ public class Explain
 	public static String explain( LineageItem li ) {
 		li.resetVisitStatusNR();
 		String s = explain(li, 0);
-		s += rExplainDedupItems(li, new ArrayList<>());
+		//s += rExplainDedupItems(li, new ArrayList<>());
 		li.resetVisitStatusNR();
 		return s;
 	}
@@ -361,6 +369,8 @@ public class Explain
 		return ret;
 	}
 	
+	@Deprecated
+	@SuppressWarnings("unused")
 	private static String rExplainDedupItems(LineageItem li, List<String> paths) {
 		if (li.isVisited())
 			return "";
@@ -614,6 +624,8 @@ public class Explain
 			}
 			//check ascent condition - append item
 			else if( tmpItem.getInputs() == null 
+				|| tmpItem.getOpcode().startsWith(LineageItemUtils.LPLACEHOLDER)
+				// don't trace beyond if a placeholder is found
 				|| tmpItem.getInputs().length <= tmpPos.intValue() ) {
 				sb.append(createOffset(level));
 				sb.append(tmpItem.toString());

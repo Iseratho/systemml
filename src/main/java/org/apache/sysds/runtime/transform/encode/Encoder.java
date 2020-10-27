@@ -20,14 +20,20 @@
 package org.apache.sysds.runtime.transform.encode;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.wink.json4j.JSONArray;
+import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.matrix.data.FrameBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixBlock;
+import org.apache.sysds.runtime.util.IndexRange;
 import org.apache.sysds.runtime.util.UtilFunctions;
+import org.apache.wink.json4j.JSONArray;
 
 /**
  * Base class for all transform encoders providing both a row and block
@@ -121,6 +127,73 @@ public abstract class Encoder implements Serializable
 	 * @return output matrix block
 	 */
 	public abstract MatrixBlock apply(FrameBlock in, MatrixBlock out);
+
+	protected int[] subRangeColList(IndexRange ixRange) {
+		List<Integer> cols = new ArrayList<>();
+		for(int col : _colList) {
+			if(ixRange.inColRange(col)) {
+				// add the correct column, removed columns before start
+				// colStart - 1 because colStart is 1-based
+				int corrColumn = (int) (col - (ixRange.colStart - 1));
+				cols.add(corrColumn);
+			}
+		}
+		return cols.stream().mapToInt(i -> i).toArray();
+	}
+
+	/**
+	 * Returns a new Encoder that only handles a sub range of columns.
+	 * 
+	 * @param ixRange the range (1-based, begin inclusive, end exclusive)
+	 * @return an encoder of the same type, just for the sub-range
+	 */
+	public Encoder subRangeEncoder(IndexRange ixRange) {
+		throw new DMLRuntimeException(
+			this.getClass().getSimpleName() + " does not support the creation of a sub-range encoder");
+	}
+
+	/**
+	 * Merges the column information, like how many columns the frame needs and which columns this encoder operates on.
+	 * 
+	 * @param other the other encoder of the same type
+	 * @param col   column at which the second encoder will be merged in (1-based)
+	 */
+	protected void mergeColumnInfo(Encoder other, int col) {
+		// update number of columns
+		_clen = Math.max(_clen, col - 1 + other._clen);
+
+		// update the new columns that this encoder operates on
+		Set<Integer> colListAgg = new HashSet<>(); // for dedup
+		for(int i : _colList)
+			colListAgg.add(i);
+		for(int i : other._colList)
+			colListAgg.add(col - 1 + i);
+		_colList = colListAgg.stream().mapToInt(i -> i).toArray();
+	}
+
+	/**
+	 * Merges another encoder, of a compatible type, in after a certain position. Resizes as necessary.
+	 * <code>Encoders</code> are compatible with themselves and <code>EncoderComposite</code> is compatible with every
+	 * other <code>Encoder</code>.
+	 * 
+	 * @param other the encoder that should be merged in
+	 * @param row   the row where it should be placed (1-based)
+	 * @param col   the col where it should be placed (1-based)
+	 */
+	public void mergeAt(Encoder other, int row, int col) {
+		throw new DMLRuntimeException(
+			this.getClass().getSimpleName() + " does not support merging with " + other.getClass().getSimpleName());
+	}
+	
+	/**
+	 * Update index-ranges to after encoding. Note that only Dummycoding changes the ranges.
+	 *
+	 * @param beginDims begin dimensions of range
+	 * @param endDims end dimensions of range
+	 */
+	public void updateIndexRanges(long[] beginDims, long[] endDims) {
+		// do nothing - default
+	}
 
 	/**
 	 * Construct a frame block out of the transform meta data.

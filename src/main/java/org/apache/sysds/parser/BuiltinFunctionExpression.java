@@ -608,6 +608,7 @@ public class BuiltinFunctionExpression extends DataIdentifier
 					break;
 				case INT64:
 				case INT32:
+				case UINT8:
 				case BOOLEAN:
 					output.setValueType(ValueType.INT64);
 					break;
@@ -716,6 +717,7 @@ public class BuiltinFunctionExpression extends DataIdentifier
 			break;
 		case TYPEOF:
 		case DETECTSCHEMA:
+		case COLNAMES:
 			checkNumParameters(1);
 			checkMatrixFrameParam(getFirstExpr());
 			output.setDataType(DataType.FRAME);
@@ -1546,6 +1548,16 @@ public class BuiltinFunctionExpression extends DataIdentifier
 			output.setDimensions(id.getDim1(), id.getDim2());
 			output.setBlocksize (id.getBlocksize());
 			output.setValueType(id.getValueType());
+			break;
+
+		case MAP:
+			checkNumParameters(2);
+			checkMatrixFrameParam(getFirstExpr());
+			checkScalarParam(getSecondExpr());
+			output.setDataType(DataType.FRAME);
+			output.setDimensions(id.getDim1(), 1);
+			output.setBlocksize (id.getBlocksize());
+			output.setValueType(ValueType.STRING);
 			break;
 
 		default:

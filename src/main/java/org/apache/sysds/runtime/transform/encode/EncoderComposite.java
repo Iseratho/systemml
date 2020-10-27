@@ -19,12 +19,15 @@
 
 package org.apache.sysds.runtime.transform.encode;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 import org.apache.sysds.common.Types.ValueType;
+import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.matrix.data.FrameBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixBlock;
+import org.apache.sysds.runtime.util.IndexRange;
 
 /**
  * Simple composite encoder that applies a list of encoders 
@@ -39,7 +42,7 @@ public class EncoderComposite extends Encoder
 	private List<Encoder> _encoders = null;
 	private FrameBlock _meta = null;
 	
-	protected EncoderComposite(List<Encoder> encoders) {
+	public EncoderComposite(List<Encoder> encoders) {
 		super(null, -1);
 		_encoders = encoders;
 	}
@@ -99,6 +102,69 @@ public class EncoderComposite extends Encoder
 			throw ex;
 		}
 		return out;
+	}
+
+	@Override
+	public Encoder subRangeEncoder(IndexRange ixRange) {
+		List<Encoder> subRangeEncoders = new ArrayList<>();
+		for (Encoder encoder : _encoders) {
+			Encoder subEncoder = encoder.subRangeEncoder(ixRange);
+			if (subEncoder != null) {
+				subRangeEncoders.add(subEncoder);
+			}
+		}
+		return new EncoderComposite(subRangeEncoders);
+	}
+
+	@Override
+	public void mergeAt(Encoder other, int row, int col) {
+		if (other instanceof EncoderComposite) {
+			EncoderComposite otherComposite = (EncoderComposite) other;
+			// TODO maybe assert that the _encoders never have the same type of encoder twice or more
+			for (Encoder otherEnc : otherComposite.getEncoders()) {
+				boolean mergedIn = false;
+				for (Encoder encoder : _encoders) {
+					if (encoder.getClass() == otherEnc.getClass()) {
+						encoder.mergeAt(otherEnc, row, col);
+						mergedIn = true;
+						break;
+					}
+				}
+				if(!mergedIn) {
+					throw new DMLRuntimeException("Tried to merge in encoder of class that is not present in "
+						+ "EncoderComposite: " + otherEnc.getClass().getSimpleName());
+				}
+			}
+			// update dummycode encoder domain sizes based on distinctness information from other encoders
+			for (Encoder encoder : _encoders) {
+				if (encoder instanceof EncoderDummycode) {
+					((EncoderDummycode) encoder).updateDomainSizes(_encoders);
+					return;
+				}
+			}
+			return;
+		}
+		for (Encoder encoder : _encoders) {
+			if (encoder.getClass() == other.getClass()) {
+				encoder.mergeAt(other, row, col);
+				// update dummycode encoder domain sizes based on distinctness information from other encoders
+				for (Encoder encDummy : _encoders) {
+					if (encDummy instanceof EncoderDummycode) {
+						((EncoderDummycode) encDummy).updateDomainSizes(_encoders);
+						return;
+					}
+				}
+				return;
+			}
+		}
+		super.mergeAt(other, row, col);
+	}
+	
+	@Override
+	public void updateIndexRanges(long[] beginDims, long[] endDims) {
+		for(Encoder enc : _encoders) {
+			enc.updateIndexRanges(beginDims, endDims);
+		}
 	}
 	
 	@Override

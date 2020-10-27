@@ -19,10 +19,13 @@
 
 package org.apache.sysds.runtime.transform.encode;
 
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.sysds.common.Types.ValueType;
 import org.apache.sysds.runtime.matrix.data.FrameBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixBlock;
+import org.apache.sysds.runtime.util.IndexRange;
 import org.apache.sysds.runtime.util.UtilFunctions;
 
 /**
@@ -37,6 +40,10 @@ public class EncoderPassThrough extends Encoder
 	
 	protected EncoderPassThrough(int[] ptCols, int clen) {
 		super(ptCols, clen); //1-based 
+	}
+	
+	public EncoderPassThrough() {
+		this(new int[0], 0);
 	}
 
 	@Override
@@ -63,6 +70,30 @@ public class EncoderPassThrough extends Encoder
 		}
 		
 		return out;
+	}
+	
+	@Override
+	public Encoder subRangeEncoder(IndexRange ixRange) {
+		List<Integer> colList = new ArrayList<>();
+		for(int col : _colList) {
+			if(col >= ixRange.colStart && col < ixRange.colEnd)
+				// add the correct column, removed columns before start
+				colList.add((int) (col - (ixRange.colStart - 1)));
+		}
+		if(colList.isEmpty())
+			// empty encoder -> return null
+			return null;
+		return new EncoderPassThrough(colList.stream().mapToInt(i -> i).toArray(),
+			(int) (ixRange.colEnd - ixRange.colStart));
+	}
+	
+	@Override
+	public void mergeAt(Encoder other, int row, int col) {
+		if(other instanceof EncoderPassThrough) {
+			mergeColumnInfo(other, col);
+			return;
+		}
+		super.mergeAt(other, row, col);
 	}
 
 	@Override

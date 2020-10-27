@@ -20,6 +20,7 @@
 package org.apache.sysds.runtime.instructions.cp;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.sysds.common.Types.DataType;
@@ -45,6 +46,14 @@ public class MultiReturnBuiltinCPInstruction extends ComputationCPInstruction {
 	
 	public CPOperand getOutput(int i) {
 		return _outputs.get(i);
+	}
+
+	public List<CPOperand> getOutputs(){
+		return _outputs;
+	}
+
+	public String[] getOutputNames(){
+		return _outputs.parallelStream().map(output -> output.getName()).toArray(String[]::new);
 	}
 	
 	public static MultiReturnBuiltinCPInstruction parseInstruction ( String str ) {

@@ -19,6 +19,8 @@
 
 package org.apache.sysds.test.component.compress;
 
+import static org.junit.Assert.assertTrue;
+
 import java.util.ArrayList;
 import java.util.Collection;
 
@@ -30,6 +32,7 @@ import org.apache.sysds.runtime.matrix.operators.CMOperator;
 import org.apache.sysds.runtime.matrix.operators.CMOperator.AggregateOperationTypes;
 import org.apache.sysds.test.TestUtils;
 import org.apache.sysds.test.component.compress.TestConstants.MatrixTypology;
+import org.apache.sysds.test.component.compress.TestConstants.OverLapping;
 import org.apache.sysds.test.component.compress.TestConstants.SparsityType;
 import org.apache.sysds.test.component.compress.TestConstants.ValueRange;
 import org.apache.sysds.test.component.compress.TestConstants.ValueType;
@@ -49,30 +52,27 @@ public class CompressedVectorTest extends CompressedTestBase {
 	@Parameters
 	public static Collection<Object[]> data() {
 		ArrayList<Object[]> tests = new ArrayList<>();
-		for(SparsityType st : usedSparsityTypes) {
-			for(ValueType vt : usedValueTypes) {
-				for(ValueRange vr : usedValueRanges) {
-					for(CompressionSettings cs : usedCompressionSettings) {
-						for(MatrixTypology mt : usedMatrixTypologyLocal) {
-							tests.add(new Object[] {st, vt, vr, cs, mt});
-						}
-					}
-				}
-			}
-		}
+		for(SparsityType st : usedSparsityTypes)
+			for(ValueType vt : usedValueTypes)
+				for(ValueRange vr : usedValueRanges)
+					for(CompressionSettings cs : usedCompressionSettings)
+						for(MatrixTypology mt : usedMatrixTypologyLocal)
+							for(OverLapping ov : overLapping)
+								tests.add(new Object[] {st, vt, vr, cs, mt, ov});
+
 		return tests;
 	}
 
 	public CompressedVectorTest(SparsityType sparType, ValueType valType, ValueRange valRange,
-		CompressionSettings compSettings, MatrixTypology matrixTypology) {
-		super(sparType, valType, valRange, compSettings, matrixTypology);
+		CompressionSettings compSettings, MatrixTypology matrixTypology, OverLapping ov) {
+		super(sparType, valType, valRange, compSettings, matrixTypology, ov, 1);
 	}
 
 	@Test
 	public void testCentralMoment() throws Exception {
 		// TODO: Make Central Moment Test work on Multi dimensional Matrix
 		try {
-			if(!(cmb instanceof CompressedMatrixBlock))
+			if(!(cmb instanceof CompressedMatrixBlock) || cols != 1)
 				return; // Input was not compressed then just pass test
 
 			// quantile uncompressed
@@ -83,11 +83,19 @@ public class CompressedVectorTest extends CompressedTestBase {
 
 			// quantile compressed
 			double ret2 = cmb.cmOperations(cm).getRequiredResult(opType);
-			// compare result with input allowing 1 bit difference in least significant location
-			TestUtils.compareScalarBitsJUnit(ret1, ret2, 64);
 
+			if(compressionSettings.lossy) {
+				double tol = lossyTolerance * 10;
+				assertTrue(
+					this.toString() + ": values uncomprssed: " + ret1 + "vs compressed: " + ret2 + " tolerance " + tol,
+					TestUtils.compareCellValue(ret1, ret2, tol, false));
+			}
+			else {
+				assertTrue(this.toString(), TestUtils.compareScalarBits(ret1, ret2, 64));
+			}
 		}
 		catch(Exception e) {
+			e.printStackTrace();
 			throw new Exception(this.toString() + "\n" + e.getMessage(), e);
 		}
 	}
@@ -95,6 +103,9 @@ public class CompressedVectorTest extends CompressedTestBase {
 	@Test
 	public void testQuantile() {
 		try {
+			if(!(cmb instanceof CompressedMatrixBlock) || cols != 1)
+				return; // Input was not compressed then just pass test
+
 			// quantile uncompressed
 			MatrixBlock tmp1 = mb.sortOperations(null, new MatrixBlock());
 			double ret1 = tmp1.pickValue(0.95);
@@ -103,10 +114,15 @@ public class CompressedVectorTest extends CompressedTestBase {
 			MatrixBlock tmp2 = cmb.sortOperations(null, new MatrixBlock());
 			double ret2 = tmp2.pickValue(0.95);
 
-			// compare result with input
-			TestUtils.compareScalarBitsJUnit(ret1, ret2, 64);
+			if(compressionSettings.lossy) {
+				TestUtils.compareCellValue(ret1, ret2, lossyTolerance, false);
+			}
+			else {
+				assertTrue(this.toString(), TestUtils.compareScalarBits(ret1, ret2, 64));
+			}
 		}
 		catch(Exception e) {
+			e.printStackTrace();
 			throw new RuntimeException(this.toString() + "\n" + e.getMessage(), e);
 		}
 	}

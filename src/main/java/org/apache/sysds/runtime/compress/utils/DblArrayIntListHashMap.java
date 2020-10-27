@@ -20,17 +20,23 @@
 package org.apache.sysds.runtime.compress.utils;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 /**
  * This class provides a memory-efficient replacement for {@code HashMap<DblArray,IntArrayList>} for restricted use
  * cases.
  * 
- * TODO: Fix allocation of size such that it contains some amount of overhead from the start, to enable hashmap
- * performance.
  */
 public class DblArrayIntListHashMap extends CustomHashMap {
 
+	protected static final Log LOG = LogFactory.getLog(DblArrayIntListHashMap.class.getName());
+
 	private DArrayIListEntry[] _data = null;
+	public static int hashMissCount = 0;
 
 	public DblArrayIntListHashMap() {
 		_data = new DArrayIListEntry[INIT_CAPACITY];
@@ -46,7 +52,6 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 		// probe for early abort
 		if(_size == 0)
 			return null;
-
 		// compute entry index position
 		int hash = hash(key);
 		int ix = indexFor(hash, _data.length);
@@ -55,7 +60,10 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 		for(DArrayIListEntry e = _data[ix]; e != null; e = e.next) {
 			if(e.key.equals(key)) {
 				return e.value;
+			}else{
+				hashMissCount++;
 			}
+
 		}
 
 		return null;
@@ -92,7 +100,7 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 				ret.add(e);
 			}
 		}
-
+		Collections.sort(ret);
 		return ret;
 	}
 
@@ -120,7 +128,7 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 
 	private static int hash(DblArray key) {
 		int h = key.hashCode();
-
+		
 		// This function ensures that hashCodes that differ only by
 		// constant multiples at each bit position have a bounded
 		// number of collisions (approximately 8 at default load factor).
@@ -132,7 +140,7 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 		return h & (length - 1);
 	}
 
-	public class DArrayIListEntry {
+	public class DArrayIListEntry implements Comparator<DArrayIListEntry>, Comparable<DArrayIListEntry> {
 		public DblArray key;
 		public IntArrayList value;
 		public DArrayIListEntry next;
@@ -142,5 +150,61 @@ public class DblArrayIntListHashMap extends CustomHashMap {
 			value = evalue;
 			next = null;
 		}
+
+		@Override
+		public int compare(DArrayIListEntry o1, DArrayIListEntry o2) {
+			double[] o1d = o1.key.getData();
+			double[] o2d = o2.key.getData();
+			for(int i = 0; i < o1d.length && i < o2d.length; i++) {
+				if(o1d[i] > o2d[i]) {
+					return 1;
+				}
+				else if(o1d[i] < o2d[i]) {
+					return -1;
+				}
+			}
+			if(o1d.length == o2d.length){
+				return 0;
+			}
+			else if(o1d.length > o2d.length) {
+				return 1;
+			}
+			else {
+				return -1;
+			}
+		}
+
+		@Override
+		public int compareTo(DArrayIListEntry o) {
+			return compare(this, o);
+		}
+
+		@Override
+		public String toString(){
+			if(next == null){
+				return key + ":" + value;
+			}else{
+				return key +":" + value + "," + next;
+			}
+		}
+	}
+
+	@Override
+	public String toString(){
+		StringBuilder sb = new StringBuilder();
+		sb.append(this.getClass().getSimpleName() + this.hashCode());
+		sb.append("   "+  _size);
+		for(int i = 0 ; i < _data.length; i++){
+			DArrayIListEntry ent = _data[i];
+			if(ent != null){
+
+				sb.append("\n");
+				sb.append("id:" + i);
+				sb.append("[");
+				sb.append(ent);
+				sb.append("]");
+			}
+		}
+		return sb.toString();
 	}
 }

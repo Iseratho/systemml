@@ -31,6 +31,7 @@ import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.mapred.JobConf;
+import org.apache.sysds.runtime.io.FileFormatPropertiesCSV;
 import org.apache.wink.json4j.JSONException;
 import org.apache.wink.json4j.OrderedJSONObject;
 import org.apache.sysds.common.Types.DataType;
@@ -455,11 +456,6 @@ public class HDFSTool
 			}
 		}
 
-		//add privacy constraints
-		if ( privacyConstraint != null ){
-			mtd.put(DataExpression.PRIVACY, privacyConstraint.getPrivacyLevel().name());
-		}
-
 		//add username and time
 		String userName = System.getProperty("user.name");
 		if (StringUtils.isNotEmpty(userName)) {
@@ -467,9 +463,20 @@ public class HDFSTool
 		} else {
 			mtd.put(DataExpression.AUTHORPARAM, "SystemDS");
 		}
+		
+		if (formatProperties instanceof FileFormatPropertiesCSV) {
+			FileFormatPropertiesCSV csvProps = (FileFormatPropertiesCSV) formatProperties;
+			mtd.put(DataExpression.DELIM_HAS_HEADER_ROW, csvProps.hasHeader());
+			mtd.put(DataExpression.DELIM_DELIMITER, csvProps.getDelim());
+		}
 
 		SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
 		mtd.put(DataExpression.CREATEDPARAM, sdf.format(new Date()));
+
+		//add privacy constraints
+		if ( privacyConstraint != null ){
+			privacyConstraint.toJson(mtd);
+		}
 
 		return mtd.toString(4); // indent with 4 spaces	
 	}

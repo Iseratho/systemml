@@ -22,28 +22,33 @@ package org.apache.sysds.runtime.instructions.fed;
 import org.apache.sysds.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysds.runtime.instructions.Instruction;
 import org.apache.sysds.runtime.matrix.operators.Operator;
-import org.apache.sysds.runtime.privacy.PrivacyPropagator;
+import org.apache.sysds.runtime.privacy.propagation.PrivacyPropagator;
 
 public abstract class FEDInstruction extends Instruction {
 	
 	public enum FEDType {
-		Init,
 		AggregateBinary,
 		AggregateUnary,
 		Append,
-		Binary
+		Binary,
+		Init,
+		MultiReturnParameterizedBuiltin,
+		ParameterizedBuiltin,
+		Tsmm,
+		MMChain,
+		Reorg,
 	}
 	
 	protected final FEDType _fedType;
-	protected final Operator _optr;
+	protected long _tid = -1; //main
 	
 	protected FEDInstruction(FEDType type, String opcode, String istr) {
 		this(type, null, opcode, istr);
 	}
 	
 	protected FEDInstruction(FEDType type, Operator op, String opcode, String istr) {
+		super(op);
 		_fedType = type;
-		_optr = op;
 		instString = istr;
 		instOpcode = opcode;
 	}
@@ -55,6 +60,14 @@ public abstract class FEDInstruction extends Instruction {
 	
 	public FEDType getFEDInstructionType() {
 		return _fedType;
+	}
+	
+	public long getTID() {
+		return _tid;
+	}
+	
+	public void setTID(long tid) {
+		_tid = tid;
 	}
 	
 	@Override

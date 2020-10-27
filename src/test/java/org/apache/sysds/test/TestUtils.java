@@ -19,15 +19,47 @@
 
 package org.apache.sysds.test;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Random;
+import java.util.Set;
+import java.util.StringTokenizer;
+
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.SequenceFile;
-import org.junit.Assert;
 import org.apache.sysds.common.Types.FileFormat;
 import org.apache.sysds.common.Types.ValueType;
 import org.apache.sysds.runtime.data.TensorBlock;
@@ -42,12 +74,7 @@ import org.apache.sysds.runtime.matrix.data.MatrixValue.CellIndex;
 import org.apache.sysds.runtime.meta.MatrixCharacteristics;
 import org.apache.sysds.runtime.util.DataConverter;
 import org.apache.sysds.runtime.util.UtilFunctions;
-
-import java.io.*;
-import java.text.NumberFormat;
-import java.util.*;
-
-import static org.junit.Assert.*;
+import org.junit.Assert;
 
 
 /**
@@ -64,7 +91,9 @@ import static org.junit.Assert.*;
  */
 public class TestUtils 
 {
-	
+
+	private static final Log LOG = LogFactory.getLog(TestUtils.class.getName());
+
 	/** job configuration used for file system access */
 	public static Configuration conf = new Configuration();
 
@@ -206,13 +235,13 @@ public class TestUtils
 				String[] rcn = line.split(" ");
 				
 				if (Integer.parseInt(expRcn[0]) != Integer.parseInt(rcn[0])) {
-					System.out.println(" Rows mismatch: expected " + Integer.parseInt(expRcn[0]) + ", actual " + Integer.parseInt(rcn[0]));
+					LOG.warn(" Rows mismatch: expected " + Integer.parseInt(expRcn[0]) + ", actual " + Integer.parseInt(rcn[0]));
 				}
 				else if (Integer.parseInt(expRcn[1]) != Integer.parseInt(rcn[1])) {
-					System.out.println(" Cols mismatch: expected " + Integer.parseInt(expRcn[1]) + ", actual " + Integer.parseInt(rcn[1]));
+					LOG.warn(" Cols mismatch: expected " + Integer.parseInt(expRcn[1]) + ", actual " + Integer.parseInt(rcn[1]));
 				}
 				else if (Integer.parseInt(expRcn[2]) != Integer.parseInt(rcn[2])) {
-					System.out.println(" Nnz mismatch: expected " + Integer.parseInt(expRcn[2]) + ", actual " + Integer.parseInt(rcn[2]));
+					LOG.warn(" Nnz mismatch: expected " + Integer.parseInt(expRcn[2]) + ", actual " + Integer.parseInt(rcn[2]));
 				}
 
 				readValuesFromFileStreamAndPut(outIn, actualValues);
@@ -696,27 +725,38 @@ public class TestUtils
 			new double[][]{actualMatrix}, 1, expectedMatrix.length, epsilon);
 	}
 	
-	/**
-	 * Compares two matrices in array format.
-	 * 
-	 * @param expectedMatrix expected values
-	 * @param actualMatrix actual values
-	 * @param rows number of rows
-	 * @param cols number of columns
-	 * @param epsilon tolerance for value comparison
-	 */
+	
 	public static void compareMatrices(double[][] expectedMatrix, double[][] actualMatrix, int rows, int cols,
-			double epsilon) {
+		double epsilon) {
+		compareMatrices(expectedMatrix, actualMatrix, expectedMatrix.length, expectedMatrix[0].length, epsilon, "");
+	}
+
+	public static void compareMatrices(double[][] expectedMatrix, double[][] actualMatrix, int rows, int cols,
+			double epsilon, String message) {
 		int countErrors = 0;
-		for (int i = 0; i < rows; i++) {
-			for (int j = 0; j < cols; j++) {
+		for (int i = 0; i < rows && countErrors < 50; i++) {
+			for (int j = 0; j < cols && countErrors < 50; j++) {
 				if (!compareCellValue(expectedMatrix[i][j], actualMatrix[i][j], epsilon, false)) {
-					System.out.println(expectedMatrix[i][j] +" vs actual: "+actualMatrix[i][j]+" at "+i+" "+j);
+					message += ("\n Expected: " +expectedMatrix[i][j] +" vs actual: "+actualMatrix[i][j]+" at "+i+" "+j);
 					countErrors++;
 				}
 			}
 		}
-		assertTrue("" + countErrors + " values are not in equal", countErrors == 0);
+		if(countErrors == 50){
+			assertTrue(message+" \n More than 50 values are not equal using epsilon " + epsilon, countErrors == 0);
+		}else{
+			assertTrue(message+" \n" + countErrors + " values are not in equal using epsilon " + epsilon, countErrors == 0);
+		}
+	}
+
+	public static void compareMatrices(double[][] expectedMatrix, double[][] actualMatrix, double epsilon){
+		compareMatrices(expectedMatrix, actualMatrix, epsilon, "");
+	}
+
+	public static void compareMatrices(double[][] expectedMatrix, double[][] actualMatrix, double epsilon, String message){
+		assertTrue(message+"\n The number of columns in the matrixes should be equal", expectedMatrix.length == actualMatrix.length);
+		assertTrue(message+"\n The number of rows in the matrixes should be equal", expectedMatrix[0].length == actualMatrix[0].length);
+		compareMatrices(expectedMatrix, actualMatrix, expectedMatrix.length, expectedMatrix[0].length, epsilon, message);
 	}
 	
 	public static void compareFrames(String[][] expectedFrame, String[][] actualFrame, int rows, int cols ) {
@@ -725,7 +765,7 @@ public class TestUtils
 			for (int j = 0; j < cols; j++) {
 				if( !( (expectedFrame[i][j]==null && actualFrame[i][j]==null) ||
 					expectedFrame[i][j].equals(actualFrame[i][j]) || (expectedFrame[i][j]+".0").equals(actualFrame[i][j])) ) {
-					System.out.println(expectedFrame[i][j] +" vs actual: "+actualFrame[i][j]+" at "+i+" "+j);
+					System.out.println("Expected:" + expectedFrame[i][j] +" vs actual: "+actualFrame[i][j]+" at "+i+" "+j);
 					countErrors++;
 				}
 			}
@@ -743,7 +783,7 @@ public class TestUtils
 		for (int i = 0; i < rows; i++) {
 			for (int j = 0; j < cols; j++) {
 				if( !compareScalarBits(expectedMatrix[i][j], actualMatrix[i][j], maxUnitsOfLeastPrecision)){
-					System.out.println(expectedMatrix[i][j] +" vs actual: "+actualMatrix[i][j]+" at "+i+" "+j);
+					System.out.println("Expected: " + expectedMatrix[i][j] +" vs actual: "+actualMatrix[i][j]+" at "+i+" "+j);
 					countErrors++;
 				}
 			}
@@ -751,25 +791,107 @@ public class TestUtils
 		assertTrue("" + countErrors + " values are not in equal", countErrors == 0);
 	}
 
+	public static void compareMatricesBitAvgDistance(double[][] expectedMatrix, double[][] actualMatrix,
+			long maxUnitsOfLeastPrecision, long maxAvgDistance, String message){
+		assertTrue("The number of columns in the matrixes should be equal", expectedMatrix.length == actualMatrix.length);
+		assertTrue("The number of rows in the matrixes should be equal", expectedMatrix[0].length == actualMatrix[0].length);
+		compareMatricesBitAvgDistance(expectedMatrix, actualMatrix, expectedMatrix.length, actualMatrix[0].length, 
+			maxUnitsOfLeastPrecision, maxAvgDistance, message);
+	}
+
 	public static void compareMatricesBitAvgDistance(double[][] expectedMatrix, double[][] actualMatrix, int rows, int cols,
 		long maxUnitsOfLeastPrecision, long maxAvgDistance, String message){
 		int countErrors = 0;
 		long sumDistance = 0;
 		long distance;
-		for (int i = 0; i < rows; i++) {
-			for (int j = 0; j < cols; j++) {
+		for (int i = 0; i < rows && countErrors < 20; i++) {
+			for (int j = 0; j < cols && countErrors < 20; j++) {
 				distance = compareScalarBits(expectedMatrix[i][j], actualMatrix[i][j]);
 				sumDistance += distance;
 				if(distance > maxUnitsOfLeastPrecision){
-					System.out.println(expectedMatrix[i][j] +" vs actual: "+actualMatrix[i][j]+" at "+i+" "+j);
+					message += ("\n Expected:" + expectedMatrix[i][j] +" vs actual: "+actualMatrix[i][j]+" at "+i+" "+j + " Distance in bits: " + distance);
 					countErrors++;
 				}
 			}
 		}
-		long avgDistance = sumDistance / (rows * cols);
-		assertTrue(message + "\n" + countErrors + " values are not in equal", countErrors == 0);
-		assertTrue(message + "\nThe avg distance in bits: "+ avgDistance +" was higher than max: " + maxAvgDistance,
-			avgDistance <= maxAvgDistance);
+		if(countErrors == 20){
+			assertTrue(message + "\n At least 20 values are not in equal", countErrors == 0);
+		}
+		else{
+			long avgDistance = sumDistance / (rows * cols);
+			assertTrue(message + "\n" + countErrors + " values are not in equal", countErrors == 0);
+			assertTrue(message + "\nThe avg distance in bits: "+ avgDistance +" was higher than max: " + maxAvgDistance,
+				avgDistance <= maxAvgDistance);
+		}
+	}
+
+	/**
+	 * Get Percent Distance with slight cheat where if values are close to 0.
+	 * @param x value 1
+	 * @param y value 2
+	 * @return Percent distance
+	 */
+	private static double getPercentDistance(double x, double y, boolean ignoreZero){
+		
+		if((x < 0 && y > 0 )||(x>0 && y< 0)) return 0.0;
+		double min = Math.abs(Math.min(x,y));
+		double max = Math.abs(Math.max(x,y));
+		if(ignoreZero && min < 0.0001){
+			return 1.0;
+		}
+		if(min < 0.0001 || max < 0.0001){
+			min += 0.0001;
+			max += 0.0001;
+		}
+		return min / max;
+	}
+
+
+
+	public static void compareMatricesPercentageDistance(double[][] expectedMatrix, double[][] actualMatrix,  
+			double percentDistanceAllowed, double maxAveragePercentDistance,  String message){
+		assertTrue("The number of columns in the matrixes should be equal", expectedMatrix.length == actualMatrix.length);
+		assertTrue("The number of rows in the matrixes should be equal", expectedMatrix[0].length == actualMatrix[0].length);
+		compareMatricesPercentageDistance(expectedMatrix, actualMatrix, expectedMatrix.length, expectedMatrix[0].length,
+			percentDistanceAllowed, maxAveragePercentDistance, message, false);
+	}
+
+	public static void compareMatricesPercentageDistance(double[][] expectedMatrix, double[][] actualMatrix,  
+			double percentDistanceAllowed, double maxAveragePercentDistance,  String message, boolean ignoreZero){
+		assertTrue("The number of columns in the matrixes should be equal", expectedMatrix.length == actualMatrix.length);
+		assertTrue("The number of rows in the matrixes should be equal", expectedMatrix[0].length == actualMatrix[0].length);
+		compareMatricesPercentageDistance(expectedMatrix, actualMatrix, expectedMatrix.length, expectedMatrix[0].length,
+			percentDistanceAllowed, maxAveragePercentDistance, message, ignoreZero);
+	}
+
+	public static void compareMatricesPercentageDistance(double[][] expectedMatrix, double[][] actualMatrix, int rows,
+		int cols, double percentDistanceAllowed, double maxAveragePercentDistance,  String message, boolean ignoreZero){
+			assertTrue("percentDistanceAllowed should be between 1 and 0", percentDistanceAllowed >= 0.0 && percentDistanceAllowed <= 1.0);
+			assertTrue("maxAveragePercentDistance should be between 1 and 0", maxAveragePercentDistance >= 0.0 && maxAveragePercentDistance <= 1.0);
+
+			int countErrors = 0;
+			double sumPercentDistance = 0;
+			double distance;
+
+			for (int i = 0; i < rows && countErrors < 20; i++) {
+				for (int j = 0; j < cols && countErrors < 20; j++) {
+					distance = getPercentDistance(expectedMatrix[i][j], actualMatrix[i][j], ignoreZero);
+					sumPercentDistance += distance;
+					if(distance < percentDistanceAllowed){
+						message += ("\nExpected: "+ expectedMatrix[i][j] +" vs actual: "+actualMatrix[i][j]+" at "+i+" "+j + " Distance in percent " + distance);
+						countErrors++;
+					}
+				}
+			}
+			if(countErrors == 20){
+				assertTrue(message + "\n At least 20 values are not in equal", countErrors == 0);
+			}
+			else{
+				double avgDistance = sumPercentDistance / (rows * cols);
+				assertTrue(message + "\n" + countErrors + " values are not in equal of total: " + (rows * cols), countErrors == 0);
+				assertTrue(message + "\nThe avg distance: "+ avgDistance +" was lower than threshold " + maxAveragePercentDistance,
+					avgDistance > maxAveragePercentDistance);
+			}
 	}
 
 	public static void compareMatricesBitAvgDistance(double[][] expectedMatrix, double[][] actualMatrix, int rows,
@@ -794,6 +916,9 @@ public class TestUtils
 	 * @return Whether distance in bits
 	 */
 	public static long compareScalarBits(double d1, double d2) {
+		
+		// assertTrue("Both values should be positive or negative",(d1 >= 0 && d2 >= 0) || (d2 <= 0 && d1 <= 0));
+		
 		long expectedBits = Double.doubleToLongBits(d1) < 0 ? 0x8000000000000000L - Double.doubleToLongBits(d1) : Double.doubleToLongBits(d1);
 		long actualBits = Double.doubleToLongBits(d2) < 0 ? 0x8000000000000000L - Double.doubleToLongBits(d2) : Double.doubleToLongBits(d2);
 		long difference = expectedBits > actualBits ? expectedBits - actualBits : actualBits - expectedBits;
@@ -803,6 +928,8 @@ public class TestUtils
 	public static boolean compareScalarBits(double d1, double d2, long maxUnitsOfLeastPrecision) {
 		if (Double.isNaN(d1) || Double.isNaN(d2))
 			return false;
+
+		// assertTrue("Both values should be positive or negative",(d1 >= 0 && d2 >= 0) || (d2 <= 0 && d1 <= 0));
 		long expectedBits = Double.doubleToLongBits(d1) < 0 ? 0x8000000000000000L - Double.doubleToLongBits(d1) : Double.doubleToLongBits(d1);
 		long actualBits = Double.doubleToLongBits(d2) < 0 ? 0x8000000000000000L - Double.doubleToLongBits(d2) : Double.doubleToLongBits(d2);
 		long difference = expectedBits > actualBits ? expectedBits - actualBits : actualBits - expectedBits;
@@ -811,7 +938,8 @@ public class TestUtils
 
 	public static void compareScalarBitsJUnit(double d1, double d2, long maxUnitsOfLeastPrecision){
 
-		assertTrue("Given scalars do not match: " + d1 + " != " + d2 ,compareScalarBits(d1,d2,maxUnitsOfLeastPrecision));
+		long distance = compareScalarBits(d1,d2);
+		assertTrue("Given scalars do not match: " + d1 + " != " + d2 + " with bitDistance: " + distance ,distance <= maxUnitsOfLeastPrecision);
 	}
 	
 	public static void compareScalars(String expected, String actual) {
@@ -857,7 +985,7 @@ public class TestUtils
 		String namesecond = name1;
 		boolean flag = true;
 		
-		/** to ensure that always the matrix with more nnz is iterated */
+		// to ensure that always the matrix with more nnz is iterated
 		if (m1.size() > m2.size()) {
 			first = m1;
 			second = m2;
@@ -868,28 +996,23 @@ public class TestUtils
 
 		int countErrorWithinTolerance = 0;
 		int countIdentical = 0;
-		double minerr = -1;
-		double maxerr = 0;
+		double minerr = Double.MAX_VALUE;
+		double maxerr = -Double.MAX_VALUE;
 
-		for (CellIndex index : first.keySet()) {
-			Double v1 = first.get(index);
-			Double v2 = second.get(index);
-			if (v1 == null)
-				v1 = 0.0;
-			if (v2 == null)
-				v2 = 0.0;
-			if (Math.abs(v1 - v2) < minerr || minerr == -1)
-				minerr = Math.abs(v1 - v2);
-			if (Math.abs(v1 - v2) > maxerr)
-				maxerr = Math.abs(v1 - v2);
+		for (Entry<CellIndex, Double> e : first.entrySet()) {
+			Double v1 = e.getValue() == null ? 0.0 : e.getValue();
+			Double v2 = second.get(e.getKey());
+			v2 = v2 == null ? 0.0 : v2;
+			minerr = Math.min(minerr, Math.abs(v1 - v2));
+			maxerr = Math.max(maxerr, Math.abs(v1 - v2));
 
-			if (!compareCellValue(first.get(index), second.get(index), 0, ignoreNaN)) {
-				if (!compareCellValue(first.get(index), second.get(index), tolerance, ignoreNaN)) {
+			if (!compareCellValue(v1, v2, 0, ignoreNaN)) {
+				if (!compareCellValue(v1, v2, tolerance, ignoreNaN)) {
 					countErrorWithinTolerance++;
 					if(!flag)
-						System.out.println(index+": "+first.get(index)+" <--> "+second.get(index));
+						System.out.println(e.getKey()+": "+v1+" <--> "+v2);
 					else 
-						System.out.println(index+": "+second.get(index)+" <--> "+first.get(index));
+						System.out.println(e.getKey()+": "+v2+" <--> "+v1);
 				}
 			} else {
 				countIdentical++;
@@ -934,7 +1057,7 @@ public class TestUtils
 			case BOOLEAN: return ((Boolean)in1).compareTo((Boolean)in2);
 			case INT64:     return ((Long)in1).compareTo((Long)in2);
 			case FP64:  
-				return (Math.abs((Double)in1-(Double)in2) < tolerance)?0:	
+				return (Math.abs((Double)in1-(Double)in2) < tolerance)?0:
 					((Double)in1).compareTo((Double)in2);
 			default: throw new RuntimeException("Unsupported value type: "+vt);
 		}
@@ -1401,6 +1524,35 @@ public class TestUtils
 				if (random.nextDouble() > sparsity)
 					continue;
 				matrix[i][j] = (random.nextDouble() * (max - min) + min);
+			}
+		}
+
+		return matrix;
+	}
+
+	/**
+	 * Generates a test matrix with the specified parameters as a two
+	 * dimensional array.
+	 * Set seed to -1 to use the current time as seed.
+	 * 
+	 * @param rows number of rows
+	 * @param cols number of columns
+	 * @param min minimum value
+	 * @param max maximum value
+	 * @param sparsity sparsity
+	 * @param seed seed
+	 * @param delta The minimum delta between values.
+	 * @return random matrix
+	 */
+	public static double[][] generateTestMatrix(int rows, int cols, double min, double max, double sparsity, long seed, double delta) {
+		double[][] matrix = new double[rows][cols];
+		Random random = (seed == -1) ? TestUtils.random : new Random(seed);
+		for (int i = 0; i < rows; i++) {
+			for (int j = 0; j < cols; j++) {
+				if (random.nextDouble() > sparsity)
+					continue;
+				double v = (random.nextDouble()) * (max - min);
+				matrix[i][j] = (v + min ) - v % delta;
 			}
 		}
 
@@ -2222,14 +2374,15 @@ public class TestUtils
 	 * @return computed result
 	 */
 	public static double[][] performMatrixMultiplication(double[][] a, double[][] b) {
-		int rows = a.length;
-		int cols = b[0].length;
-		double[][] result = new double[rows][cols];
+		int m = a.length;
+		int n = a[0].length;
+		int l = b[0].length;
+		double[][] result = new double[m][l];
 
-		for (int i = 0; i < rows; i++) {
-			for (int j = 0; j < cols; j++) {
+		for (int i = 0; i < m; i++) {
+			for (int j = 0; j < l; j++) {
 				double value = 0;
-				for (int k = 0; k < a[i].length; k++) {
+				for (int k = 0; k < n; k++) {
 					value += (a[i][k] * b[k][j]);
 				}
 				result[i][j] = value;
@@ -2445,6 +2598,11 @@ public class TestUtils
 		for( Thread t : ts )
 			shutdownThread(t);
 	}
+
+	public static void shutdownThreads(Process... ts) {
+		for( Process t : ts )
+			shutdownThread(t);
+	}
 	
 	public static void shutdownThread(Thread t) {
 		// kill the worker
@@ -2457,6 +2615,23 @@ public class TestUtils
 				e.printStackTrace();
 			}
 		}
+	}
+
+	public static void shutdownThread(Process t) {
+		// kill the worker
+		if( t != null ) {
+			Process d = t.destroyForcibly();
+			try {
+				d.waitFor();
+			}
+			catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	public static String federatedAddress(int port, String input) {
+		return federatedAddress("localhost", port, input);
 	}
 	
 	public static String federatedAddress(String host, int port, String input) {

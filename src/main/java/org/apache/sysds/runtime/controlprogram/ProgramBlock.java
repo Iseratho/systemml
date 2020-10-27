@@ -45,6 +45,7 @@ import org.apache.sysds.runtime.instructions.cp.StringObject;
 import org.apache.sysds.runtime.lineage.LineageCache;
 import org.apache.sysds.runtime.lineage.LineageCacheConfig.ReuseCacheType;
 import org.apache.sysds.runtime.matrix.data.MatrixBlock;
+import org.apache.sysds.runtime.privacy.propagation.PrivacyPropagator;
 import org.apache.sysds.utils.Statistics;
 
 import java.util.ArrayList;
@@ -242,8 +243,9 @@ public abstract class ProgramBlock implements ParseInfo
 			
 			// try to reuse instruction result from lineage cache
 			if( !LineageCache.reuse(tmp, ec) ) {
-				// process actual instruction
 				long et0 = !ReuseCacheType.isNone() ? System.nanoTime() : 0;
+				
+				// process actual instruction
 				tmp.processInstruction(ec);
 				
 				// cache result
@@ -259,6 +261,9 @@ public abstract class ProgramBlock implements ParseInfo
 				}
 			}
 
+			// propagate input privacy constraints to output
+			PrivacyPropagator.postProcessInstruction(tmp, ec);
+
 			// optional trace information (instruction and runtime)
 			if( LOG.isTraceEnabled() ) {
 				long t1 = System.nanoTime();
@@ -272,11 +277,11 @@ public abstract class ProgramBlock implements ParseInfo
 				checkSparsity( tmp, ec.getVariables() );
 			}
 		}
+		catch (DMLScriptException e){
+			throw e;
+		}
 		catch (Exception e) {
-			if ( e instanceof DMLScriptException)
-				throw (DMLScriptException)e;
-			else
-				throw new DMLRuntimeException(printBlockErrorLocation() + "Error evaluating instruction: " + currInst.toString() , e);
+			throw new DMLRuntimeException(printBlockErrorLocation() + "Error evaluating instruction: " + currInst.toString() , e);
 		}
 	}
 	

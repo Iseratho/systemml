@@ -79,14 +79,7 @@ convert_frame_tokens_to_matrix_bow_2 = function(Frame[Unknown] FX, Frame[Unknown
   X_tokens = E_tokens[1:nrow(FX),];
   Y_tokens = E_tokens[nrow(FX):nrow(E_tokens),];
 
-  X = table(X_ids[,1], X_tokens[,1], as.matrix(FX[,3]));
-  Y = table(Y_ids[,1], Y_tokens[,1], as.matrix(FY[,3]));
-  if (ncol(X) < ncol(Y))
-  {
-    X = cbind(X, matrix(0, nrow(X), ncol(Y) - ncol(X)));
-  }
-  else  if (ncol(Y) < ncol(X))
-  {
-    Y = cbind(Y, matrix(0, nrow(Y), ncol(X) - ncol(Y)));
-  }
+  ncols = max(max(X_tokens), max(Y_tokens));
+  X = table(X_ids[,1], X_tokens[,1], as.matrix(FX[,3]), nrow(X_ids), ncols);
+  Y = table(Y_ids[,1], Y_tokens[,1], as.matrix(FY[,3]), nrow(Y_ids), ncols);
 }

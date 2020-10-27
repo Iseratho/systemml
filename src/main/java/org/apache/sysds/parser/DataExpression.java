@@ -19,7 +19,21 @@
 
 package org.apache.sysds.parser;
 
+import static org.apache.sysds.runtime.instructions.fed.InitFEDInstruction.FED_FRAME_IDENTIFIER;
+import static org.apache.sysds.runtime.instructions.fed.InitFEDInstruction.FED_MATRIX_IDENTIFIER;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map.Entry;
+import java.util.Set;
+
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.Path;
 import org.apache.wink.json4j.JSONArray;
@@ -37,25 +51,17 @@ import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.controlprogram.parfor.stat.InfrastructureAnalyzer;
 import org.apache.sysds.runtime.io.FileFormatPropertiesMM;
 import org.apache.sysds.runtime.io.IOUtilFunctions;
+import org.apache.sysds.runtime.privacy.PrivacyConstraint;
 import org.apache.sysds.runtime.privacy.PrivacyConstraint.PrivacyLevel;
+import org.apache.sysds.runtime.privacy.PrivacyUtils;
 import org.apache.sysds.runtime.util.HDFSTool;
 import org.apache.sysds.runtime.util.UtilFunctions;
 import org.apache.sysds.utils.JSONHelper;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.Map.Entry;
-
-import static org.apache.sysds.runtime.instructions.fed.InitFEDInstruction.FED_FRAME_IDENTIFIER;
-import static org.apache.sysds.runtime.instructions.fed.InitFEDInstruction.FED_MATRIX_IDENTIFIER;
-
 public class DataExpression extends DataIdentifier
 {
+	private static final Log LOG = LogFactory.getLog(DataExpression.class.getName());
+
 	public static final String RAND_DIMS = "dims";
 
 	public static final String RAND_ROWS = "rows";
@@ -99,6 +105,7 @@ public class DataExpression extends DataIdentifier
 	public static final String CREATEDPARAM = "created";
 
 	public static final String PRIVACY = "privacy";
+	public static final String FINE_GRAINED_PRIVACY = "fine_grained_privacy";
 
 	// Parameter names relevant to reading/writing delimited/csv files
 	public static final String DELIM_DELIMITER = "sep";
@@ -106,8 +113,9 @@ public class DataExpression extends DataIdentifier
 	public static final String DELIM_FILL = "fill";
 	public static final String DELIM_FILL_VALUE = "default";
 	//public static final String DELIM_RECODE = "recode";
-	public static final String DELIM_NA_STRINGS = "na.strings";
+	public static final String DELIM_NA_STRINGS = "naStrings";
 	public static final String DELIM_NA_STRING_SEP = "\u00b7";
+
 	
 	public static final String DELIM_SPARSE = "sparse";  // applicable only for write
 	
@@ -124,7 +132,7 @@ public class DataExpression extends DataIdentifier
 	public static final Set<String> FEDERATED_VALID_PARAM_NAMES = new HashSet<>(
 		Arrays.asList(FED_ADDRESSES, FED_RANGES, FED_TYPE));
 
-	// Valid parameter names in a metadata file
+	/** Valid parameter names in metadata file */
 	public static final Set<String> READ_VALID_MTD_PARAM_NAMES =new HashSet<>(
 		Arrays.asList(IO_FILENAME, READROWPARAM, READCOLPARAM, READNNZPARAM,
 			FORMAT_TYPE, ROWBLOCKCOUNTPARAM, COLUMNBLOCKCOUNTPARAM, DATATYPEPARAM,
@@ -132,8 +140,9 @@ public class DataExpression extends DataIdentifier
 			// Parameters related to delimited/csv files.
 			DELIM_FILL_VALUE, DELIM_DELIMITER, DELIM_FILL, DELIM_HAS_HEADER_ROW, DELIM_NA_STRINGS,
 			// Parameters related to privacy
-			PRIVACY));
+			PRIVACY, FINE_GRAINED_PRIVACY));
 
+	/** Valid parameter names in arguments to read instruction */
 	public static final Set<String> READ_VALID_PARAM_NAMES = new HashSet<>(
 		Arrays.asList(IO_FILENAME, READROWPARAM, READCOLPARAM, FORMAT_TYPE, DATATYPEPARAM,
 			VALUETYPEPARAM, SCHEMAPARAM, ROWBLOCKCOUNTPARAM, COLUMNBLOCKCOUNTPARAM, READNNZPARAM,
@@ -146,6 +155,7 @@ public class DataExpression extends DataIdentifier
 	public static final boolean DEFAULT_DELIM_FILL = true;
 	public static final double  DEFAULT_DELIM_FILL_VALUE = 0.0;
 	public static final boolean DEFAULT_DELIM_SPARSE = false;
+	public static final String  DEFAULT_NA_STRINGS = "";
 	
 	private DataOp _opcode;
 	private HashMap<String, Expression> _varParams;
@@ -171,7 +181,10 @@ public class DataExpression extends DataIdentifier
 			ParseInfo parseInfo, CustomErrorListener errorListener) {
 		if (functionName == null || passedParamExprs == null)
 			return null;
-		
+		if( LOG.isDebugEnabled() ) {
+			LOG.debug("getDataExpression: " + functionName + " " 
+				+ passedParamExprs + " " + parseInfo + " " + errorListener);
+		}
 		// check if the function name is built-in function
 		//	 (assign built-in function op if function is built-in)
 		Expression.DataOp dop;
@@ -777,10 +790,9 @@ public class DataExpression extends DataIdentifier
 			if (inputParamExpr instanceof FunctionCallIdentifier) {
 				raiseValidateError("UDF function call not supported as parameter to built-in function call", false,LanguageErrorCodes.INVALID_PARAMETERS);
 			}
-			
 			inputParamExpr.validateExpression(ids, currConstVars, conditional);
-			if ( getVarParam(s).getOutput().getDataType() != DataType.SCALAR && !s.equals(RAND_DATA) &&
-					!s.equals(RAND_DIMS) && !s.equals(FED_ADDRESSES) && !s.equals(FED_RANGES)) {
+			if (s != null && !s.equals(RAND_DATA) && !s.equals(RAND_DIMS) && !s.equals(FED_ADDRESSES) && !s.equals(FED_RANGES)
+					&& !s.equals(DELIM_NA_STRINGS) && getVarParam(s).getOutput().getDataType() != DataType.SCALAR ) {
 				raiseValidateError("Non-scalar data types are not supported for data expression.", conditional,LanguageErrorCodes.INVALID_PARAMETERS);
 			}
 		}
@@ -875,7 +887,7 @@ public class DataExpression extends DataIdentifier
 					shouldReadMTD = false;
 				}
 			}
-			
+
 			// check if file is delimited format
 			if (formatTypeString == null && shouldReadMTD ) {
 				formatTypeString = checkHasDelimitedFormat(inputFileName, conditional);
@@ -957,6 +969,8 @@ public class DataExpression extends DataIdentifier
 				}
 			}
 			
+			boolean isCSV = (formatTypeString != null && formatTypeString.equalsIgnoreCase(FileFormat.CSV.toString()));
+			
 			if (shouldReadMTD){
 				configObject = readMetadataFile(mtdFileName, conditional);
 				// if the MTD file exists, check the values specified in read statement match values in metadata MTD file
@@ -965,37 +979,23 @@ public class DataExpression extends DataIdentifier
 					inferredFormatType = true;
 				}
 				else {
-					LOG.warn("Metadata file: " + new Path(mtdFileName) + " not provided");
+					if(!isCSV){
+						LOG.warn("Metadata file: " + new Path(mtdFileName) + " not provided");
+					}
 				}
 			}
 			
-			boolean isCSV = false;
-			isCSV = (formatTypeString != null && formatTypeString.equalsIgnoreCase(FileFormat.CSV.toString()));
 			if (isCSV){
-				 // Handle delimited file format
-				 // 
-				 // 1) only allow IO_FILENAME, _HEADER_ROW, FORMAT_DELIMITER, READROWPARAM, READCOLPARAM
-				 //  
-				 // 2) open the file
-				 //
-			
+
 				// there should be no MTD file for delimited file format
 				shouldReadMTD = true;
 				
-				// only allow IO_FILENAME, HAS_HEADER_ROW, FORMAT_DELIMITER, READROWPARAM, READCOLPARAM
-				//		as ONLY valid parameters
+				// Handle valid ParamNames.
 				if( !inferredFormatType ){
 					for (String key : _varParams.keySet()){
-						if (!  (key.equals(IO_FILENAME) || key.equals(FORMAT_TYPE) 
-								|| key.equals(DELIM_HAS_HEADER_ROW) || key.equals(DELIM_DELIMITER) 
-								|| key.equals(DELIM_FILL) || key.equals(DELIM_FILL_VALUE)
-								|| key.equals(READROWPARAM) || key.equals(READCOLPARAM)
-								|| key.equals(READNNZPARAM) || key.equals(DATATYPEPARAM) || key.equals(VALUETYPEPARAM)
-								|| key.equals(SCHEMAPARAM)) )
+						if (! READ_VALID_PARAM_NAMES.contains(key))
 						{	
-							String msg = "Only parameters allowed are: " + Arrays.toString(new String[] {
-								IO_FILENAME, SCHEMAPARAM, DELIM_HAS_HEADER_ROW, DELIM_DELIMITER,
-								DELIM_FILL, DELIM_FILL_VALUE, READROWPARAM, READCOLPARAM});
+							String msg = "Only parameters allowed are: " + READ_VALID_PARAM_NAMES;
 							raiseValidateError("Invalid parameter " + key + " in read statement: " +
 								toString() + ". " + msg, conditional, LanguageErrorCodes.INVALID_PARAMETERS);
 						}
@@ -1005,7 +1005,8 @@ public class DataExpression extends DataIdentifier
 				// DEFAULT for "sep" : ","
 				if (getVarParam(DELIM_DELIMITER) == null) {
 					addVarParam(DELIM_DELIMITER, new StringIdentifier(DEFAULT_DELIM_DELIMITER, this));
-				} else {
+				}
+				else {
 					if ( (getVarParam(DELIM_DELIMITER) instanceof ConstIdentifier)
 						&& (! (getVarParam(DELIM_DELIMITER) instanceof StringIdentifier)))
 					{
@@ -1017,18 +1018,20 @@ public class DataExpression extends DataIdentifier
 				// DEFAULT for "default": 0
 				if (getVarParam(DELIM_FILL_VALUE) == null) {
 					addVarParam(DELIM_FILL_VALUE, new DoubleIdentifier(DEFAULT_DELIM_FILL_VALUE, this));
-				} else {
+				}
+				else {
 					if ( (getVarParam(DELIM_FILL_VALUE) instanceof ConstIdentifier)
-							&& (! (getVarParam(DELIM_FILL_VALUE) instanceof IntIdentifier ||  getVarParam(DELIM_FILL_VALUE) instanceof DoubleIdentifier)))
+						&& (! (getVarParam(DELIM_FILL_VALUE) instanceof IntIdentifier ||  getVarParam(DELIM_FILL_VALUE) instanceof DoubleIdentifier)))
 					{
 						raiseValidateError("For delimited file '" + getVarParam(DELIM_FILL_VALUE)  +  "' must be a numeric value ", conditional);
 					}
-				} 
+				}
 				
 				// DEFAULT for "header": boolean false
 				if (getVarParam(DELIM_HAS_HEADER_ROW) == null) {
 					addVarParam(DELIM_HAS_HEADER_ROW, new BooleanIdentifier(DEFAULT_DELIM_HAS_HEADER_ROW, this));
-				} else {
+				}
+				else {
 					if ((getVarParam(DELIM_HAS_HEADER_ROW) instanceof ConstIdentifier)
 						&& (! (getVarParam(DELIM_HAS_HEADER_ROW) instanceof BooleanIdentifier)))
 					{
@@ -1043,11 +1046,24 @@ public class DataExpression extends DataIdentifier
 				else {
 					
 					if ((getVarParam(DELIM_FILL) instanceof ConstIdentifier)
-							&& (! (getVarParam(DELIM_FILL) instanceof BooleanIdentifier)))
+						&& (! (getVarParam(DELIM_FILL) instanceof BooleanIdentifier)))
 					{
 						raiseValidateError("For delimited file '" + getVarParam(DELIM_FILL) + "' must be a boolean value ", conditional);
 					}
-				}		
+				}
+
+				// DEFAULT for "naStrings": String ""
+				if (getVarParam(DELIM_NA_STRINGS) == null){
+					addVarParam(DELIM_NA_STRINGS, new StringIdentifier(DEFAULT_NA_STRINGS, this));
+				} 
+				else {
+					if ((getVarParam(DELIM_NA_STRINGS) instanceof ConstIdentifier)
+							&& (! (getVarParam(DELIM_NA_STRINGS) instanceof StringIdentifier)))
+						{
+							raiseValidateError("For delimited file '" + getVarParam(DELIM_NA_STRINGS) + "' must be a string value ", conditional);
+						}
+					LOG.info("Replacing :" + _varParams.get(DELIM_NA_STRINGS) + " with NaN");
+				}
 			} 
 
 			boolean islibsvm = false;
@@ -1096,11 +1112,7 @@ public class DataExpression extends DataIdentifier
 					getOutput().setNnz(nnz);
 				}
 				
-				// set privacy
-				Expression eprivacy = getVarParam("privacy");
-				if ( eprivacy != null ){
-					getOutput().setPrivacy(PrivacyLevel.valueOf(eprivacy.toString()));
-				}
+				setPrivacy();
 
 				// Following dimension checks must be done when data type = MATRIX_DATA_TYPE 
 				// initialize size of target data identifier to UNKNOWN
@@ -1161,8 +1173,8 @@ public class DataExpression extends DataIdentifier
 			else if ( dataTypeString.equalsIgnoreCase(Statement.SCALAR_DATA_TYPE)) {
 				getOutput().setDataType(DataType.SCALAR);
 				getOutput().setNnz(-1L);
+				setPrivacy();
 			}
-			
 			else{
 				raiseValidateError("Unknown Data Type " + dataTypeString + ". Valid  values: " + Statement.SCALAR_DATA_TYPE +", " + Statement.MATRIX_DATA_TYPE, conditional, LanguageErrorCodes.INVALID_PARAMETERS);
 			}
@@ -2095,12 +2107,13 @@ public class DataExpression extends DataIdentifier
 							addVarParam(key.toString(), doubleId);
 						}
 						else if (key.toString().equalsIgnoreCase(DELIM_NA_STRINGS) 
-								|| key.toString().equalsIgnoreCase(PRIVACY)) {
+								|| key.toString().equalsIgnoreCase(PRIVACY)
+								|| key.toString().equalsIgnoreCase(FINE_GRAINED_PRIVACY)) {
 							String naStrings = null;
 							if ( val instanceof String) {
 								naStrings = val.toString();
 							}
-							else {
+							else if (val instanceof JSONArray) {
 								StringBuilder sb = new StringBuilder();
 								JSONArray valarr = (JSONArray)val;
 								for(int naid=0; naid < valarr.size(); naid++ ) {
@@ -2109,6 +2122,14 @@ public class DataExpression extends DataIdentifier
 										sb.append( DELIM_NA_STRING_SEP );
 								}
 								naStrings = sb.toString();
+							}
+							else if ( val instanceof JSONObject ){
+								JSONObject valJsonObject = (JSONObject)val;
+								naStrings = valJsonObject.toString();
+							}
+							else {
+								throw new ParseException("Type of value " + val 
+									+ " from metadata not recognized by parser.");
 							}
 							StringIdentifier sid = new StringIdentifier(naStrings, this);
 							removeVarParam(key.toString());
@@ -2121,7 +2142,7 @@ public class DataExpression extends DataIdentifier
 					}
 				}
 			}
-    	}
+		}
 	}
 	
 	public JSONObject readMetadataFile(String filename, boolean conditional) 
@@ -2225,5 +2246,22 @@ public class DataExpression extends DataIdentifier
 	{
 		return (_opcode == DataOp.READ);
 	}
-	
+
+	/**
+	 * Sets privacy of identifier if privacy variable parameter is set.  
+	 */
+	private void setPrivacy(){
+		Expression eprivacy = getVarParam(PRIVACY);
+		Expression eFineGrainedPrivacy = getVarParam(FINE_GRAINED_PRIVACY);
+		if ( eprivacy != null || eFineGrainedPrivacy != null ){
+			PrivacyConstraint privacyConstraint = new PrivacyConstraint();
+			if ( eprivacy != null ){
+				privacyConstraint.setPrivacyLevel(PrivacyLevel.valueOf(eprivacy.toString()));
+			}
+			if ( eFineGrainedPrivacy != null ){
+				PrivacyUtils.setFineGrainedPrivacy(privacyConstraint, eFineGrainedPrivacy);
+			}
+			getOutput().setPrivacy(privacyConstraint);
+		}
+	}
 } // end class

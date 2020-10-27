@@ -26,6 +26,7 @@ import org.apache.sysds.runtime.controlprogram.context.ExecutionContext;
 import org.apache.sysds.runtime.controlprogram.context.ExecutionContextFactory;
 import org.apache.sysds.runtime.instructions.Instruction;
 import org.apache.sysds.runtime.instructions.InstructionParser;
+import org.apache.sysds.runtime.lineage.LineageRecomputeUtils.DedupLoopItem;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,7 +40,7 @@ public class LineageParser
 		lineageTraceTokenizer.add("\\(");
 		lineageTraceTokenizer.add("[0-9]+", "id");
 		lineageTraceTokenizer.add("\\) \\(");
-		lineageTraceTokenizer.add("L|C|I", "type");
+		lineageTraceTokenizer.add("L|C|I|D", "type");
 		lineageTraceTokenizer.add("\\) ");
 		lineageTraceTokenizer.add(".+", "representation");
 	}
@@ -77,6 +78,7 @@ public class LineageParser
 					break;
 				
 				case Instruction:
+				case Dedup:
 					li = parseLineageInstruction(id, representation, map, name);
 					break;
 				
@@ -89,11 +91,18 @@ public class LineageParser
 	}
 	
 	private static LineageItem parseLineageInstruction(Long id, String str, Map<Long, LineageItem> map, String name) {
-		ArrayList<LineageItem> inputs = new ArrayList<>();
 		String[] tokens = str.split(" ");
 		if (tokens.length < 2)
 			throw new ParseException("Invalid length ot lineage item "+tokens.length+".");
 		String opcode = tokens[0];
+
+		if (opcode.startsWith(LineageItemUtils.LPLACEHOLDER)) {
+			// Convert this to a leaf node (creation type)
+			String data = opcode;
+			return new LineageItem(id, data, "Create"+opcode);
+		}
+
+		ArrayList<LineageItem> inputs = new ArrayList<>();
 		for( int i=1; i<tokens.length; i++ ) {
 			String token = tokens[i];
 			if (token.startsWith("(") && token.endsWith(")")) {
@@ -103,5 +112,28 @@ public class LineageParser
 				throw new ParseException("Invalid format for LineageItem reference");
 		}
 		return new LineageItem(id, "", opcode, inputs.toArray(new LineageItem[0]));
+	}
+	
+	protected static void parseLineageTraceDedup(String str) {
+		str.replaceAll("\r\n", "\n");
+		String[] allPatches = str.split("\n\n");
+		for (String patch : allPatches) {
+			String[] headBody = patch.split("\r\n|\r|\n", 2);
+			// Parse the header (e.g. patch_R_SB15_1)
+			String[] parts = headBody[0].split(LineageDedupUtils.DEDUP_DELIM);
+			// Deserialize the patch
+			LineageItem patchLi = parseLineageTrace(headBody[1]);
+			Long pathId = Long.parseLong(parts[3]);
+			// Map the pathID and the DAG root name to the deserialized DAG.
+			String loopName = parts[2];
+			if (!LineageRecomputeUtils.loopPatchMap.containsKey(loopName)) 
+				LineageRecomputeUtils.loopPatchMap.put(loopName, new DedupLoopItem(loopName));
+			DedupLoopItem loopItem = LineageRecomputeUtils.loopPatchMap.get(loopName);
+
+			if (!loopItem.patchLiMap.containsKey(pathId)) {
+				loopItem.patchLiMap.put(pathId, new HashMap<>());
+			}
+			loopItem.patchLiMap.get(pathId).put(parts[1], patchLi);
+		}
 	}
 }

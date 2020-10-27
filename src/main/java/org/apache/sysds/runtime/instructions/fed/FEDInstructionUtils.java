@@ -19,62 +19,132 @@
 
 package org.apache.sysds.runtime.instructions.fed;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.sysds.runtime.controlprogram.caching.CacheableData;
 import org.apache.sysds.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysds.runtime.controlprogram.context.ExecutionContext;
+import org.apache.sysds.runtime.controlprogram.federated.FederationMap.FType;
 import org.apache.sysds.runtime.instructions.Instruction;
-import org.apache.sysds.runtime.instructions.cp.*;
+import org.apache.sysds.runtime.instructions.cp.AggregateBinaryCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.AggregateUnaryCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.BinaryCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.Data;
+import org.apache.sysds.runtime.instructions.cp.MMChainCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.MMTSJCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.MultiReturnParameterizedBuiltinCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.ParameterizedBuiltinCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.ReorgCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.VariableCPInstruction;
 import org.apache.sysds.runtime.instructions.spark.AggregateUnarySPInstruction;
 import org.apache.sysds.runtime.instructions.spark.AppendGAlignedSPInstruction;
+import org.apache.sysds.runtime.instructions.spark.AppendGSPInstruction;
 import org.apache.sysds.runtime.instructions.spark.MapmmSPInstruction;
 import org.apache.sysds.runtime.instructions.spark.WriteSPInstruction;
 
 public class FEDInstructionUtils {
+	private static final Log LOG = LogFactory.getLog(FEDInstructionUtils.class.getName());
+
 	// This is currently a rather simplistic to our solution of replacing instructions with their correct federated
 	// counterpart, since we do not propagate the information that a matrix is federated, therefore we can not decide
 	// to choose a federated instruction earlier.
+
+	/**
+	 * Check and replace CP instructions with federated instructions if the instruction match criteria.
+	 * 
+	 * @param inst The instruction to analyse
+	 * @param ec The Execution Context 
+	 * @return The potentially modified instruction
+	 */
 	public static Instruction checkAndReplaceCP(Instruction inst, ExecutionContext ec) {
+		FEDInstruction fedinst = null;
 		if (inst instanceof AggregateBinaryCPInstruction) {
 			AggregateBinaryCPInstruction instruction = (AggregateBinaryCPInstruction) inst;
 			if( instruction.input1.isMatrix() && instruction.input2.isMatrix() ) {
 				MatrixObject mo1 = ec.getMatrixObject(instruction.input1);
 				MatrixObject mo2 = ec.getMatrixObject(instruction.input2);
-				if (mo1.isFederated() || mo2.isFederated()) {
-					return AggregateBinaryFEDInstruction.parseInstruction(inst.getInstructionString());
+				if (mo1.isFederated(FType.ROW) || mo2.isFederated(FType.ROW)) {
+					fedinst = AggregateBinaryFEDInstruction.parseInstruction(inst.getInstructionString());
 				}
 			}
+		}
+		else if( inst instanceof MMChainCPInstruction) {
+			MMChainCPInstruction linst = (MMChainCPInstruction) inst;
+			MatrixObject mo = ec.getMatrixObject(linst.input1);
+			if( mo.isFederated() )
+				fedinst = MMChainFEDInstruction.parseInstruction(linst.getInstructionString());
+		}
+		else if( inst instanceof MMTSJCPInstruction ) {
+			MMTSJCPInstruction linst = (MMTSJCPInstruction) inst;
+			MatrixObject mo = ec.getMatrixObject(linst.input1);
+			if( mo.isFederated() )
+				fedinst = TsmmFEDInstruction.parseInstruction(linst.getInstructionString());
 		}
 		else if (inst instanceof AggregateUnaryCPInstruction) {
 			AggregateUnaryCPInstruction instruction = (AggregateUnaryCPInstruction) inst;
 			if( instruction.input1.isMatrix() && ec.containsVariable(instruction.input1) ) {
 				MatrixObject mo1 = ec.getMatrixObject(instruction.input1);
-				if (mo1.isFederated() && instruction.getAUType() == AggregateUnaryCPInstruction.AUType.DEFAULT)
-					return AggregateUnaryFEDInstruction.parseInstruction(inst.getInstructionString());
+				if (mo1.isFederated() && instruction.getAUType() == AggregateUnaryCPInstruction.AUType.DEFAULT){
+					LOG.debug("Federated UnaryAggregate");
+					fedinst = AggregateUnaryFEDInstruction.parseInstruction(inst.getInstructionString());
+				}
 			}
 		}
 		else if (inst instanceof BinaryCPInstruction) {
 			BinaryCPInstruction instruction = (BinaryCPInstruction) inst;
-			if( instruction.input1.isMatrix() && instruction.input2.isScalar() ){
-				MatrixObject mo = ec.getMatrixObject(instruction.input1);
-				if(mo.isFederated())
-					return BinaryFEDInstruction.parseInstruction(inst.getInstructionString());
-			}
-			if( instruction.input2.isMatrix() && instruction.input1.isScalar() ){
-				MatrixObject mo = ec.getMatrixObject(instruction.input2);
-				if(mo.isFederated())
-					return BinaryFEDInstruction.parseInstruction(inst.getInstructionString());
+			if( (instruction.input1.isMatrix() && ec.getMatrixObject(instruction.input1).isFederated())
+				|| (instruction.input2.isMatrix() && ec.getMatrixObject(instruction.input2).isFederated()) ) {
+				if(instruction.getOpcode().equals("append"))
+					fedinst = AppendFEDInstruction.parseInstruction(inst.getInstructionString());
+				else
+					fedinst = BinaryFEDInstruction.parseInstruction(inst.getInstructionString());
 			}
 		}
+		else if( inst instanceof ParameterizedBuiltinCPInstruction ) {
+			ParameterizedBuiltinCPInstruction pinst = (ParameterizedBuiltinCPInstruction) inst;
+			if(pinst.getOpcode().equals("replace") && pinst.getTarget(ec).isFederated()) {
+				fedinst = ParameterizedBuiltinFEDInstruction.parseInstruction(pinst.getInstructionString());
+			}
+			else if((pinst.getOpcode().equals("transformdecode") || pinst.getOpcode().equals("transformapply")) &&
+				pinst.getTarget(ec).isFederated()) {
+				return ParameterizedBuiltinFEDInstruction.parseInstruction(pinst.getInstructionString());
+			}
+		}
+		else if (inst instanceof MultiReturnParameterizedBuiltinCPInstruction) {
+			MultiReturnParameterizedBuiltinCPInstruction minst = (MultiReturnParameterizedBuiltinCPInstruction) inst;
+			if(minst.getOpcode().equals("transformencode") && minst.input1.isFrame()) {
+				CacheableData<?> fo = ec.getCacheableData(minst.input1);
+				if(fo.isFederated()) {
+					fedinst = MultiReturnParameterizedBuiltinFEDInstruction
+						.parseInstruction(minst.getInstructionString());
+				}
+			}
+		}
+		else if(inst instanceof ReorgCPInstruction && inst.getOpcode().equals("r'")) {
+			ReorgCPInstruction rinst = (ReorgCPInstruction) inst;
+			CacheableData<?> mo = ec.getCacheableData(rinst.input1);
+			if( mo.isFederated() )
+				fedinst = ReorgFEDInstruction.parseInstruction(rinst.getInstructionString());
+		}
+		
+		//set thread id for federated context management
+		if( fedinst != null ) {
+			fedinst.setTID(ec.getTID());
+			return fedinst;
+		}
+		
 		return inst;
 	}
 	
 	public static Instruction checkAndReplaceSP(Instruction inst, ExecutionContext ec) {
+		FEDInstruction fedinst = null;
 		if (inst instanceof MapmmSPInstruction) {
 			// FIXME does not yet work for MV multiplication. SPARK execution mode not supported for federated l2svm
 			MapmmSPInstruction instruction = (MapmmSPInstruction) inst;
 			Data data = ec.getVariable(instruction.input1);
 			if (data instanceof MatrixObject && ((MatrixObject) data).isFederated()) {
 				// TODO correct FED instruction string
-				return new AggregateBinaryFEDInstruction(instruction.getOperator(),
+				fedinst = new AggregateBinaryFEDInstruction(instruction.getOperator(),
 					instruction.input1, instruction.input2, instruction.output, "ba+*", "FED...");
 			}
 		}
@@ -82,7 +152,7 @@ public class FEDInstructionUtils {
 			AggregateUnarySPInstruction instruction = (AggregateUnarySPInstruction) inst;
 			Data data = ec.getVariable(instruction.input1);
 			if (data instanceof MatrixObject && ((MatrixObject) data).isFederated())
-				return AggregateUnaryFEDInstruction.parseInstruction(inst.getInstructionString());
+				fedinst = AggregateUnaryFEDInstruction.parseInstruction(inst.getInstructionString());
 		}
 		else if (inst instanceof WriteSPInstruction) {
 			WriteSPInstruction instruction = (WriteSPInstruction) inst;
@@ -98,9 +168,22 @@ public class FEDInstructionUtils {
 			AppendGAlignedSPInstruction instruction = (AppendGAlignedSPInstruction) inst;
 			Data data = ec.getVariable(instruction.input1);
 			if (data instanceof MatrixObject && ((MatrixObject) data).isFederated()) {
-				return AppendFEDInstruction.parseInstruction(instruction.getInstructionString());
+				fedinst = AppendFEDInstruction.parseInstruction(instruction.getInstructionString());
 			}
 		}
+		else if (inst instanceof AppendGSPInstruction) {
+			AppendGSPInstruction instruction = (AppendGSPInstruction) inst;
+			Data data = ec.getVariable(instruction.input1);
+			if(data instanceof MatrixObject && ((MatrixObject) data).isFederated()) {
+				fedinst = AppendFEDInstruction.parseInstruction(instruction.getInstructionString());
+			}
+		}
+		//set thread id for federated context management
+		if( fedinst != null ) {
+			fedinst.setTID(ec.getTID());
+			return fedinst;
+		}
+		
 		return inst;
 	}
 }

@@ -45,13 +45,7 @@ jobs:
           ${{ runner.os }}-maven-
   
     - name: Make Documentation SystemDS Java
-      run: mvn -P distribution package
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v1
-      with:
-        name: Java-documentation
-        path: target/apidocs
+      run: mvn -ntp -P distribution package
 
   documentation2:
     runs-on: ubuntu-latest
@@ -83,9 +77,3 @@ jobs:
       run: |
         cd src/main/python/docs
         make html
-
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v1
-      with:
-        name: Python-documentation
-        path: src/main/python/docs/build

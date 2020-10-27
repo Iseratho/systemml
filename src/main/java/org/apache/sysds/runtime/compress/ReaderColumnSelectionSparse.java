@@ -32,26 +32,31 @@ import org.apache.sysds.runtime.matrix.data.MatrixBlock;
  * zero-value in a sparse matrix like any other value.
  */
 public class ReaderColumnSelectionSparse extends ReaderColumnSelection {
-	private final DblArray ZERO_DBL_ARRAY;
-	private DblArray nonZeroReturn;
 
 	// reusable return
 	private DblArray reusableReturn;
 	private double[] reusableArr;
 
+	// an empty array to return if the entire row was 0.
+	private DblArray empty = new DblArray();
+
 	// current sparse row positions
 	private SparseRow[] sparseCols = null;
 	private int[] sparsePos = null;
 
-	public ReaderColumnSelectionSparse(MatrixBlock data, int[] colIndexes, boolean skipZeros, CompressionSettings compSettings) {
-		super(colIndexes, compSettings.transposeInput ? data.getNumColumns() : data.getNumRows(), skipZeros, compSettings);
-		ZERO_DBL_ARRAY = new DblArray(new double[colIndexes.length], true);
+	/**
+	 * Reader of sparse matrix blocks for compression.
+	 * 
+	 * This reader should not be used if the input data is not transposed and sparse
+	 * 
+	 * @param data         The transposed and sparse matrix
+	 * @param colIndexes   The column indexes to combine
+	 * @param compSettings The compression settings.
+	 */
+	public ReaderColumnSelectionSparse(MatrixBlock data, int[] colIndexes, CompressionSettings compSettings) {
+		super(colIndexes, compSettings.transposeInput ? data.getNumColumns() : data.getNumRows(), compSettings);
 		reusableArr = new double[colIndexes.length];
 		reusableReturn = new DblArray(reusableArr);
-
-		if(!_compSettings.transposeInput) {
-			throw new RuntimeException("SparseColumnSelectionReader should not be used without transposed input.");
-		}
 
 		sparseCols = new SparseRow[colIndexes.length];
 		sparsePos = new int[colIndexes.length];
@@ -60,26 +65,12 @@ public class ReaderColumnSelectionSparse extends ReaderColumnSelection {
 				sparseCols[i] = data.getSparseBlock().get(colIndexes[i]);
 	}
 
-	@Override
-	public DblArray nextRow() {
-		if(_skipZeros) {
-			while((nonZeroReturn = getNextRow()) != null && nonZeroReturn == ZERO_DBL_ARRAY) {
-			}
-			return nonZeroReturn;
-		}
-		else {
-			return getNextRow();
-		}
-	}
+	protected DblArray getNextRow() {
+		if(_lastRow == _numRows - 1) {
 
-	private DblArray getNextRow() {
-		if(_lastRow == _numRows - 1)
 			return null;
-		_lastRow++;
-
-		if(!_compSettings.transposeInput) {
-			throw new RuntimeException("SparseColumnSelectionReader should not be used without transposed input.");
 		}
+		_lastRow++;
 
 		// move pos to current row if necessary (for all columns)
 		for(int i = 0; i < _colIndexes.length; i++)
@@ -87,7 +78,6 @@ public class ReaderColumnSelectionSparse extends ReaderColumnSelection {
 				(sparseCols[i].indexes().length <= sparsePos[i] || sparseCols[i].indexes()[sparsePos[i]] < _lastRow)) {
 				sparsePos[i]++;
 			}
-
 		// extract current values
 		Arrays.fill(reusableArr, 0);
 		boolean zeroResult = true;
@@ -97,7 +87,6 @@ public class ReaderColumnSelectionSparse extends ReaderColumnSelection {
 				reusableArr[i] = sparseCols[i].values()[sparsePos[i]];
 				zeroResult = false;
 			}
-
-		return zeroResult ? ZERO_DBL_ARRAY : reusableReturn;
+		return zeroResult ? empty : reusableReturn;
 	}
 }

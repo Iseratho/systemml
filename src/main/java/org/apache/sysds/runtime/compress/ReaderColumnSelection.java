@@ -19,24 +19,26 @@
 
 package org.apache.sysds.runtime.compress;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.sysds.runtime.compress.utils.DblArray;
 
-/**
- * Base class for all column selection readers.
- */
+/** Base class for all column selection readers. */
 public abstract class ReaderColumnSelection {
+
+	protected static final Log LOG = LogFactory.getLog(ReaderColumnSelection.class.getName());
 	protected int[] _colIndexes = null;
 	protected int _numRows = -1;
 	protected int _lastRow = -1;
-	protected boolean _skipZeros = false;
+
+	private DblArray nonZeroReturn;
 
 	protected CompressionSettings _compSettings;
 
-	protected ReaderColumnSelection(int[] colIndexes, int numRows, boolean skipZeros, CompressionSettings compSettings) {
+	protected ReaderColumnSelection(int[] colIndexes, int numRows, CompressionSettings compSettings) {
 		_colIndexes = colIndexes;
 		_numRows = numRows;
 		_lastRow = -1;
-		_skipZeros = skipZeros;
 		_compSettings = compSettings;
 	}
 
@@ -45,7 +47,13 @@ public abstract class ReaderColumnSelection {
 	 * 
 	 * @return next row
 	 */
-	public abstract DblArray nextRow();
+	public DblArray nextRow() {
+		while((nonZeroReturn = getNextRow()) != null && DblArray.isZero(nonZeroReturn)) {
+		}
+		return nonZeroReturn;
+	}
+
+	protected abstract DblArray getNextRow();
 
 	public int getCurrentRowIndex() {
 		return _lastRow;

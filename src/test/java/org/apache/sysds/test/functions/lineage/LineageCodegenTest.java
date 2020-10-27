@@ -23,22 +23,19 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
-import org.junit.Test;
 import org.apache.sysds.hops.OptimizerUtils;
 import org.apache.sysds.runtime.controlprogram.caching.MatrixObject;
 import org.apache.sysds.runtime.instructions.cp.Data;
 import org.apache.sysds.runtime.lineage.Lineage;
 import org.apache.sysds.runtime.lineage.LineageCacheConfig.ReuseCacheType;
-import org.apache.sysds.runtime.lineage.LineageItem;
-import org.apache.sysds.runtime.lineage.LineageItemUtils;
-import org.apache.sysds.runtime.lineage.LineageParser;
+import org.apache.sysds.runtime.lineage.LineageRecomputeUtils;
 import org.apache.sysds.runtime.matrix.data.MatrixBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixValue.CellIndex;
-import org.apache.sysds.test.AutomatedTestBase;
 import org.apache.sysds.test.TestConfiguration;
 import org.apache.sysds.test.TestUtils;
+import org.junit.Test;
 
-public class LineageCodegenTest extends AutomatedTestBase {
+public class LineageCodegenTest extends LineageBase {
 	
 	protected static final String TEST_DIR = "functions/lineage/";
 	protected static final String TEST_NAME1 = "LineageCodegenTrace"; //rand - matrix result
@@ -80,7 +77,7 @@ public class LineageCodegenTest extends AutomatedTestBase {
 		boolean old_sum_product = OptimizerUtils.ALLOW_SUM_PRODUCT_REWRITES;
 		
 		try {
-			System.out.println("------------ BEGIN " + testname + "------------");
+			LOG.debug("------------ BEGIN " + testname + "------------");
 			OptimizerUtils.ALLOW_ALGEBRAIC_SIMPLIFICATION = false;
 			OptimizerUtils.ALLOW_SUM_PRODUCT_REWRITES = false;
 			
@@ -103,8 +100,7 @@ public class LineageCodegenTest extends AutomatedTestBase {
 			
 			//get lineage and generate program
 			String Rtrace = readDMLLineageFromHDFS("R");
-			LineageItem R = LineageParser.parseLineageTrace(Rtrace);
-			Data ret = LineageItemUtils.computeByLineage(R);
+			Data ret = LineageRecomputeUtils.parseNComputeLineageTrace(Rtrace, null);
 			HashMap<CellIndex, Double> dmlfile = readDMLMatrixFromHDFS("R");
 			MatrixBlock tmp = ((MatrixObject)ret).acquireReadAndRelease();
 			TestUtils.compareMatrices(dmlfile, tmp, 1e-6);

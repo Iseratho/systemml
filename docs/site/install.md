@@ -23,11 +23,17 @@ limitations under the License.
 
 This guide helps in the install and setup of SystemDS from source code.
 
+- [Windows Guide](#windows)
+- [Ubuntu/Linux Guide](#ubuntu-2004)
+- [Mac Guide](#mac)
+
 ## Windows
 
 TODO
 
-## Build from source on Ubuntu 20.04
+---
+
+## Ubuntu 20.04
 
 ### Java and Maven
 
@@ -58,6 +64,68 @@ Default locale: en_US, platform encoding: UTF-8
 OS name: "linux", version: "5.4.0-37-generic", arch: "amd64", family: "unix"
 ```
 
+### Testing
+
+R is required to be install to run the test suite, since many tests are constructed to comprare output with common R packages.
+One option to install this is to follow the guide on the following link: <https://linuxize.com/post/how-to-install-r-on-ubuntu-20-04/>
+
+At the time of writing the commands to install R 4.0.2 are:
+
+```bash
+sudo apt install dirmngr gnupg apt-transport-https ca-certificates software-properties-common
+sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
+sudo add-apt-repository 'deb https://cloud.r-project.org/bin/linux/ubuntu focal-cran40/'
+sudo apt install r-base
+```
+
+See [Build the project](#Build%20the%20project) to compile the code from here.
+
+---
+
+## MAC
+
+Prerequisite install homebrew on the device.
+
+```bash
+# To allow relative paths:
+brew install coreutils
+# To install open jdk 8.
+brew tap adoptopenjdk/openjdk
+brew cask install adoptopenjdk8
+# Install maven to enable compilation of SystemDS.
+brew install maven
+```
+
+Then afterwards verify the install:
+
+```bash
+java --version
+mvn --version
+```
+
+This should print something like:
+
+```bash
+Java version: 1.8.0_242, vendor: AdoptOpenJDK, runtime: /Library/Java/JavaVirtualMachines/adoptopenjdk-8.jdk/Contents/Home/jre
+Default locale: ru_UA, platform encoding: UTF-8
+OS name: "mac os x", version: "10.15.5", arch: "x86_64", family: "mac"
+
+Apache Maven 3.6.3 (cecedd343002696d0abb50b32b541b8a6ba2883f)
+Maven home: /usr/local/Cellar/maven/3.6.3_1/libexec
+```
+
+Note that if you have multiple __java__ versions installed then you have to change the used version to 8, on __both java and javadoc__. This is done by setting the environment variable JAVA_HOME to the install path of open JDK 8 :
+
+``` bash
+export JAVA_HOME=`/usr/libexec/java_home -v 1.8`
+```
+
+For running all tests [r-base](https://cran.r-project.org/bin/macosx/) has to be installed as well since this is used as a secondary system to verify the correctness of our code, but it is not a requirement to enable building the project.
+
+See [Build the project](#Build%20the%20project) to compile the code from here.
+
+---
+
 ## Build the project
 
 To compile the project use:
@@ -65,8 +133,6 @@ To compile the project use:
 ```bash
 mvn package -P distribution
 ```
-
-After some time it should return with:
 
 ```bash
 [INFO] ------------------------------------------------------------------------
@@ -81,4 +147,5 @@ The first time you package the system it will take longer since maven will downl
 But successive compiles should become faster.
 
 Now everything is setup and ready to go!
-To execute dml scripts i suggest to take a look at [Execute SystemDS](run)
+To execute dml scripts look at [Execute SystemDS](run)
+

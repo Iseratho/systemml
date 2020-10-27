@@ -19,8 +19,8 @@
 
 package org.apache.sysds.hops.ipa;
 
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import java.util.Set;
 import java.util.Map.Entry;
 
@@ -44,11 +44,11 @@ public class IPAPassRemoveUnusedFunctions extends IPAPass
 	}
 	
 	@Override
-	public void rewriteProgram( DMLProgram prog, FunctionCallGraph fgraph, FunctionCallSizeInfo fcallSizes ) {
+	public boolean rewriteProgram( DMLProgram prog, FunctionCallGraph fgraph, FunctionCallSizeInfo fcallSizes ) {
 		try {
 			Set<String> fnamespaces = prog.getNamespaces().keySet();
 			for( String fnspace : fnamespaces  ) {
-				HashMap<String, FunctionStatementBlock> fsbs = prog.getFunctionStatementBlocks(fnspace);
+				Map<String, FunctionStatementBlock> fsbs = prog.getFunctionStatementBlocks(fnspace);
 				Iterator<Entry<String, FunctionStatementBlock>> iter = fsbs.entrySet().iterator();
 				while( iter.hasNext() ) {
 					Entry<String, FunctionStatementBlock> e = iter.next();
@@ -64,5 +64,6 @@ public class IPAPassRemoveUnusedFunctions extends IPAPass
 		catch(LanguageException ex) {
 			throw new HopsException(ex);
 		}
+		return false;
 	}
 }

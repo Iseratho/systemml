@@ -31,7 +31,7 @@ import org.apache.sysds.common.Types.ReturnType;
  * case of DML script, these functions are loaded during parsing. As
  * always, user-defined DML-bodied functions take precedence over all
  * builtin functions.
- * 
+ *
  * To add a new builtin script function, simply add the definition here
  * as well as a dml file in scripts/builtin with a matching name. On 
  * building SystemDS, these scripts are packaged into the jar as well.
@@ -40,6 +40,9 @@ public enum Builtins {
 	//builtin functions
 	ABS("abs", false),
 	ACOS("acos", false),
+	ALS("als", true),
+	ALS_CG("alsCG", true),
+	ALS_DS("alsDS", true),
 	ASIN("asin", false),
 	ATAN("atan", false),
 	AVG_POOL("avg_pool", false),
@@ -53,6 +56,7 @@ public enum Builtins {
 	BITWXOR("bitwXor", false),
 	BITWSHIFTL("bitwShiftL", false),
 	BITWSHIFTR("bitwShiftR", false),
+	BIVAR("bivar", true),
 	CAST_AS_SCALAR("as.scalar", "castAsScalar", false),
 	CAST_AS_MATRIX("as.matrix", false),
 	CAST_AS_FRAME("as.frame", false),
@@ -64,6 +68,7 @@ public enum Builtins {
 	COLMAX("colMaxs", false),
 	COLMEAN("colMeans", false),
 	COLMIN("colMins", false),
+	COLNAMES("colnames", false),
 	COLPROD("colProds", false),
 	COLSD("colSds", false),
 	COLSUM("colSums", false),
@@ -82,20 +87,25 @@ public enum Builtins {
 	CUMSUM("cumsum", false),
 	CUMSUMPROD("cumsumprod", false),
 	CONFUSIONMATRIX("confusionMatrix", true),
+	COR("cor", true),
+	DBSCAN("dbscan", true),
 	DETECTSCHEMA("detectSchema", false),
 	DIAG("diag", false),
 	DISCOVER_FD("discoverFD", true),
+	DIST("dist", true),
 	DROP_INVALID_TYPE("dropInvalidType", false),
 	DROP_INVALID_LENGTH("dropInvalidLength", false),
 	EIGEN("eigen", false, ReturnType.MULTI_RETURN),
 	EXISTS("exists", false),
-	ExecutePipeline("executePipeline", true),
+	EXECUTE_PIPELINE("executePipeline", true),
 	EXP("exp", false),
 	EVAL("eval", false),
 	FLOOR("floor", false),
 	GLM("glm", true),
+	GMM("gmm", true),
 	GNMF("gnmf", true),
 	GRID_SEARCH("gridSearch", true),
+	HYPERBAND("hyperband", true),
 	IFELSE("ifelse", false),
 	IMG_MIRROR("img_mirror", true),
 	IMG_BRIGHTNESS("img_brightness", true),
@@ -109,7 +119,9 @@ public enum Builtins {
 	ISNAN("is.nan", false),
 	ISINF("is.infinite", false),
 	KMEANS("kmeans", true),
+	KMEANSPREDICT("kmeansPredict", true),
 	L2SVM("l2svm", true),
+	LASSO("lasso", true),
 	LENGTH("length", false),
 	LINEAGE("lineage", false),
 	LIST("list", false),  //note: builtin and parbuiltin
@@ -121,6 +133,7 @@ public enum Builtins {
 	LSTM("lstm", false, ReturnType.MULTI_RETURN),
 	LSTM_BACKWARD("lstm_backward", false, ReturnType.MULTI_RETURN),
 	LU("lu", false, ReturnType.MULTI_RETURN),
+	MAP("map", false),
 	MEAN("mean", "avg", false),
 	MICE("mice", true),
 	MIN("min", "pmin", false),
@@ -133,6 +146,7 @@ public enum Builtins {
 	MSVMPREDICT("msvmPredict", true),
 	MULTILOGREG("multiLogReg", true),
 	MULTILOGREGPREDICT("multiLogRegPredict", true),
+	NA_LOCF("na_locf", true),
 	NCOL("ncol", false),
 	NORMALIZE("normalize", true),
 	NROW("nrow", false),
@@ -141,7 +155,9 @@ public enum Builtins {
 	OUTLIER("outlier", true, false), //TODO parameterize opposite
 	OUTLIER_SD("outlierBySd", true),
 	OUTLIER_IQR("outlierByIQR", true),
+	PCA("pca", true),
 	PNMF("pnmf", true),
+	PPCA("ppca", true),
 	PPRED("ppred", false),
 	PROD("prod", false),
 	QR("qr", false, ReturnType.MULTI_RETURN),
@@ -169,6 +185,7 @@ public enum Builtins {
 	SINH("sinh", false),
 	STEPLM("steplm",true, ReturnType.MULTI_RETURN),
 	SLICEFINDER("slicefinder", true),
+	SMOTE("smote", true),
 	SOLVE("solve", false),
 	SQRT("sqrt", false),
 	SUM("sum", false),
@@ -179,13 +196,14 @@ public enum Builtins {
 	TANH("tanh", false),
 	TRACE("trace", false),
 	TO_ONE_HOT("toOneHot", true),
-	TYPEOF("typeOf", false),
+	TYPEOF("typeof", false),
 	COUNT_DISTINCT("countDistinct",false),
 	COUNT_DISTINCT_APPROX("countDistinctApprox",false),
 	VAR("var", false),
 	XOR("xor", false),
+	UNIVAR("univar", true),
 	WINSORIZE("winsorize", true, false), //TODO parameterize w/ prob, min/max val
-	
+
 	//parameterized builtin functions
 	CDF("cdf", false, true),
 	GROUPEDAGG("aggregate", "groupedAggregate", false, true),
@@ -215,28 +233,30 @@ public enum Builtins {
 	TRANSFORMDECODE("transformdecode", false, true),
 	TRANSFORMENCODE("transformencode", false, true),
 	TRANSFORMMETA("transformmeta", false, true),
-	UPPER_TRI("upper.tri", false, true);
-	
+	UPPER_TRI("upper.tri", false, true),
+	XDUMMY1("xdummy1", true), //error handling test
+	XDUMMY2("xdummy2", true); //error handling test
+
 	Builtins(String name, boolean script) {
 		this(name, null, script, false, ReturnType.SINGLE_RETURN);
 	}
-	
+
 	Builtins(String name, boolean script, ReturnType retType) {
 		this(name, null, script, false, retType);
 	}
-	
+
 	Builtins(String name, boolean script, boolean parameterized) {
 		this(name, null, script, parameterized, ReturnType.SINGLE_RETURN);
 	}
-	
+
 	Builtins(String name, String alias, boolean script) {
 		this(name, alias, script, false, ReturnType.SINGLE_RETURN);
 	}
-	
+
 	Builtins(String name, String alias, boolean script, boolean parameterized) {
 		this(name, alias, script, parameterized, ReturnType.SINGLE_RETURN);
 	}
-	
+
 	Builtins(String name, String alias, boolean script, boolean parameterized, ReturnType retType) {
 		_name = name;
 		_alias = alias;
@@ -244,10 +264,10 @@ public enum Builtins {
 		_parameterized = parameterized;
 		_retType = retType;
 	}
-	
+
 	private final static String BUILTIN_DIR = "scripts/builtin/";
 	private final static HashMap<String, Builtins> _map = new HashMap<>();
-	
+
 	static {
 		//materialize lookup map for all builtin names
 		for( Builtins b : EnumSet.allOf(Builtins.class) ) {
@@ -256,52 +276,52 @@ public enum Builtins {
 				_map.put(b.getAlias(), b);
 		}
 	}
-	
+
 	private final String _name;
 	private final String _alias;
 	private final boolean _script;
 	private final boolean _parameterized;
 	private final ReturnType _retType;
-	
+
 	public String getName() {
 		return _name;
 	}
-	
+
 	public String getAlias() {
 		return _alias;
 	}
-	
+
 	public boolean isScript() {
 		return _script;
 	}
-	
+
 	public boolean isParameterized() {
 		return _parameterized;
 	}
-	
+
 	public boolean isMultiReturn() {
 		return _retType == ReturnType.MULTI_RETURN;
 	}
-	
+
 	public static boolean contains(String name, boolean script, boolean parameterized) {
 		Builtins tmp = get(name);
 		return tmp != null && script == tmp.isScript()
-			&& parameterized == tmp.isParameterized();
+				&& parameterized == tmp.isParameterized();
 	}
-	
+
 	public static Builtins get(String name) {
 		if( name.equals("list") )
 			return LIST; //unparameterized
 		return _map.get(name);
 	}
-	
+
 	public static Builtins get(String name, boolean params) {
 		if( name.equals("list") )
 			return params ? LISTNV : LIST;
 		Builtins tmp = get(name);
 		return tmp != null && (params == tmp.isParameterized()) ? tmp : null;
 	}
-	
+
 	public static String getFilePath(String name) {
 		StringBuilder sb = new StringBuilder();
 		sb.append(BUILTIN_DIR);
@@ -309,7 +329,7 @@ public enum Builtins {
 		sb.append(".dml");
 		return sb.toString();
 	}
-	
+
 	public static String getInternalFName(String name, DataType dt) {
 		return (dt.isMatrix() ? "m_" : "s_") + name;
 	}

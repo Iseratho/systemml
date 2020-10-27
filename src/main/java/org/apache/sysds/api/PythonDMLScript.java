@@ -22,6 +22,7 @@ package org.apache.sysds.api;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.apache.sysds.api.jmlc.Connection;
+import org.apache.sysds.conf.CompilerConfig;
 
 import py4j.GatewayServer;
 import py4j.GatewayServerListener;
@@ -39,7 +40,13 @@ public class PythonDMLScript {
 	 * @param args Command line arguments.
 	 */
 	public static void main(String[] args) {
-		start(Integer.parseInt(args[0]));
+		if(args.length != 1) {
+			throw new IllegalArgumentException("Python DML Script should be initialized with a singe number argument");
+		}
+		else {
+			int port = Integer.parseInt(args[0]);
+			start(port);
+		}
 	}
 
 	private static void start(int port) {
@@ -56,7 +63,17 @@ public class PythonDMLScript {
 	}
 
 	private PythonDMLScript() {
-		_connection = new Connection();
+		// we enable multi-threaded I/O and operations for a single JMLC
+		// connection because the calling Python process is unlikely to run
+		// multi-threaded streams of operations on the same shared context
+		_connection = new Connection(
+			CompilerConfig.ConfigType.PARALLEL_CP_READ_TEXTFORMATS,
+			CompilerConfig.ConfigType.PARALLEL_CP_WRITE_TEXTFORMATS,
+			CompilerConfig.ConfigType.PARALLEL_CP_READ_BINARYFORMATS,
+			CompilerConfig.ConfigType.PARALLEL_CP_WRITE_BINARYFORMATS,
+			CompilerConfig.ConfigType.PARALLEL_CP_MATRIX_OPERATIONS,
+			CompilerConfig.ConfigType.PARALLEL_LOCAL_OR_REMOTE_PARFOR,
+			CompilerConfig.ConfigType.ALLOW_DYN_RECOMPILATION);
 	}
 
 	public Connection getConnection() {
@@ -108,5 +125,4 @@ class DMLGateWayListener implements GatewayServerListener {
 	public void serverStopped() {
 		System.out.println("GatewayServer Stopped");
 	}
-
 }

@@ -26,15 +26,16 @@ import org.apache.sysds.common.Types.ValueType;
 import org.apache.sysds.runtime.DMLRuntimeException;
 import org.apache.sysds.runtime.instructions.Instruction;
 import org.apache.sysds.runtime.instructions.InstructionUtils;
+import org.apache.sysds.runtime.privacy.PrivacyConstraint;
 
-
-public class CPOperand 
+public class CPOperand
 {
 	private String _name;
 	private ValueType _valueType;
 	private DataType _dataType;
 	private boolean _isLiteral;
 	private ScalarObject _literal;
+	private PrivacyConstraint _privacyConstraint;
 	
 	public CPOperand() {
 		this("", ValueType.UNKNOWN, DataType.UNKNOWN);
@@ -92,6 +93,10 @@ public class CPOperand
 	
 	public boolean isMatrix() {
 		return _dataType.isMatrix();
+	}
+	
+	public boolean isFrame() {
+		return _dataType.isFrame();
 	}
 
 	public boolean isTensor() {
@@ -154,6 +159,14 @@ public class CPOperand
 			_name = opr[0];
 			_valueType = ValueType.valueOf(opr[1]);
 		}
+	}
+
+	public PrivacyConstraint getPrivacyConstraint() {
+		return _privacyConstraint;
+	}
+
+	public void setPrivacyConstraint(PrivacyConstraint privacyConstraint) {
+		_privacyConstraint = privacyConstraint;
 	}
 
 	@Override

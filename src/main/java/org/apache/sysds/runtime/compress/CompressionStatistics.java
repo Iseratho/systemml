@@ -19,7 +19,6 @@
 
 package org.apache.sysds.runtime.compress;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,7 +28,7 @@ import org.apache.sysds.runtime.compress.colgroup.ColGroup.CompressionType;
 
 public class CompressionStatistics {
 
-	private ArrayList<Double> timePhases = new ArrayList<>();
+	private double lastPhase;
 	public double ratio;
 	public long originalSize;
 	public long estimatedSizeColGroups;
@@ -42,11 +41,11 @@ public class CompressionStatistics {
 	}
 
 	public void setNextTimePhase(double time) {
-		timePhases.add(time);
+		lastPhase = time;
 	}
 
 	public double getLastTimePhase() {
-		return timePhases.get(timePhases.size() - 1);
+		return lastPhase;
 	}
 
 	/**
@@ -79,10 +78,6 @@ public class CompressionStatistics {
 		return colGroupCounts;
 	}
 
-	public ArrayList<Double> getTimeArrayList() {
-		return timePhases;
-	}
-
 	public String getGroupsTypesString() {
 		StringBuilder sb = new StringBuilder();
 
@@ -110,22 +105,4 @@ public class CompressionStatistics {
 		return sb.toString();
 	}
 
-	public static long getSizeInMemory() {
-		long total = 16; // header
-		total += 8; // compression ratio
-		total += 8; // original size
-		total += 8; // estimated size col groups
-		total += 8; // estimated size cols
-		total += 8; // actual size
-
-		total += 8; // Array list Time phases
-		total += 8; // Map colGroup Counts
-
-		// TODO what happens if we scale number of col Groups...
-		// TODO Reduce memory usage for compression statistics.
-		total += 64; // HashMap col Groups.
-		total += 40; // ArrayList time phases
-
-		return total;
-	}
 }

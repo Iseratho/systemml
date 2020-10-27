@@ -1,17 +1,24 @@
-# Licensed to the Apache Software Foundation (ASF) under one or more
-# contributor license agreements.  See the NOTICE file distributed with
-# this work for additional information regarding copyright ownership.
-# The ASF licenses this file to you under the Apache License, Version 2.0
-# (the "License"); you may not use this file except in compliance with
-# the License.  You may obtain a copy of the License at
+# -------------------------------------------------------------
 #
-# http://www.apache.org/licenses/LICENSE-2.0
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
 #
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+# -------------------------------------------------------------
+
 
 import os
 import subprocess
@@ -71,19 +78,23 @@ def run_and_compare_output(name: str, test_case: unittest.TestCase) -> None:
     :param name: The name of the test-case (also used for finding onnx-model, dml-wrapper and reference output)
     :param test_case: The testcase
     """
-    onnx2systemds("tests/onnx_systemds/test_models/" + name + ".onnx", "tests/onnx_systemds/dml_output/" + name + ".dml")
-    ret = invoke_systemds("tests/onnx_systemds/dml_wrapper/" + name + "_wrapper.dml")
-    test_case.assertEqual(ret, 0, "systemds failed")
+    try:
+        onnx2systemds("tests/onnx_systemds/test_models/" + name + ".onnx", "tests/onnx_systemds/dml_output/" + name + ".dml")
+        ret = invoke_systemds("tests/onnx_systemds/dml_wrapper/" + name + "_wrapper.dml")
+        test_case.assertEqual(ret, 0, "systemds failed")
 
-    # We read the file content such that pytest can present the actual difference between the files
-    with open("tests/onnx_systemds/output_reference/" + name + "_reference.out") as reference_file:
-        reference_content = reference_file.read()
+        # We read the file content such that pytest can present the actual difference between the files
+        with open("tests/onnx_systemds/output_reference/" + name + "_reference.out") as reference_file:
+            reference_content = reference_file.read()
 
-    with open("tests/onnx_systemds/output_test/" + name + ".out") as output_file:
-        test_content = output_file.read()
+        with open("tests/onnx_systemds/output_test/" + name + ".out") as output_file:
+            test_content = output_file.read()
 
-    test_case.assertEqual(
-        test_content,
-        reference_content,
-        "generated output differed from reference output"
-    )
+        test_case.assertEqual(
+            test_content,
+            reference_content,
+            "generated output differed from reference output"
+        )
+    except KeyError as e:
+        if "SYSTEMDS_ROOT" in os.environ:
+            test_case.fail("SYSTEMDS Key was set and the test failed anyway.")

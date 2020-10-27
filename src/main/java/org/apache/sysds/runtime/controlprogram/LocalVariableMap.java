@@ -23,15 +23,14 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
+import java.util.StringTokenizer;
 
 import org.apache.sysds.runtime.controlprogram.caching.CacheableData;
 import org.apache.sysds.runtime.controlprogram.parfor.util.IDSequence;
 import org.apache.sysds.runtime.instructions.cp.Data;
 import org.apache.sysds.runtime.instructions.cp.ListObject;
 import org.apache.sysds.runtime.util.ProgramConverter;
-
-import java.util.Set;
-import java.util.StringTokenizer;
 
 /**
  * Replaces <code>HashMap&lang;String, Data&rang;</code> as the table of
@@ -106,14 +105,14 @@ public class LocalVariableMap implements Cloneable
 		localMap.clear();
 	}
 	
-	public void removeAllIn(Set<String> blacklist) {
+	public void removeAllIn(Set<String> excludeList) {
 		localMap.entrySet().removeIf(
-			e -> blacklist.contains(e.getKey()));
+			e -> excludeList.contains(e.getKey()));
 	}
 	
-	public void removeAllNotIn(Set<String> blacklist) {
+	public void removeAllNotIn(Set<String> excludeList) {
 		localMap.entrySet().removeIf(
-			e -> !blacklist.contains(e.getKey()));
+			e -> !excludeList.contains(e.getKey()));
 	}
 
 	public boolean hasReferences( Data d ) {

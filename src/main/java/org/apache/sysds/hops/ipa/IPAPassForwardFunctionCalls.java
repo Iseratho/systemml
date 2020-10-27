@@ -47,7 +47,7 @@ public class IPAPassForwardFunctionCalls extends IPAPass
 	}
 	
 	@Override
-	public void rewriteProgram( DMLProgram prog, FunctionCallGraph fgraph, FunctionCallSizeInfo fcallSizes ) 
+	public boolean rewriteProgram( DMLProgram prog, FunctionCallGraph fgraph, FunctionCallSizeInfo fcallSizes ) 
 	{
 		for( String fkey : fgraph.getReachableFunctions() ) {
 			FunctionStatementBlock fsb = prog.getFunctionStatementBlock(fkey);
@@ -79,13 +79,15 @@ public class IPAPassForwardFunctionCalls extends IPAPass
 				reconcileFunctionInputsInPlace(call1, call2);
 				//step 5: update function call graph (old, new)
 				fgraph.replaceFunctionCalls(fkey, call2.getFunctionKey());
-				prog.removeFunctionStatementBlock(fkey);
+				if( !fgraph.containsSecondOrderCall() )
+					prog.removeFunctionStatementBlock(fkey);
 				
 				if( LOG.isDebugEnabled() )
 					LOG.debug("IPA: Forward-function-call: replaced '"
 						+ fkey +"' with '"+call2.getFunctionKey()+"'");
 			}
 		}
+		return false;
 	}
 	
 	private static boolean singleFunctionOp(ArrayList<Hop> hops) {

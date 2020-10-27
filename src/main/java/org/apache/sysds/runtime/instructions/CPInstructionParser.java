@@ -21,6 +21,7 @@ package org.apache.sysds.runtime.instructions;
 
 import java.util.HashMap;
 
+import org.apache.sysds.hops.FunctionOp;
 import org.apache.sysds.lops.Append;
 import org.apache.sysds.lops.DataGen;
 import org.apache.sysds.lops.LeftIndex;
@@ -41,6 +42,7 @@ import org.apache.sysds.runtime.instructions.cp.CompressionCPInstruction;
 import org.apache.sysds.runtime.instructions.cp.CovarianceCPInstruction;
 import org.apache.sysds.runtime.instructions.cp.CtableCPInstruction;
 import org.apache.sysds.runtime.instructions.cp.DataGenCPInstruction;
+import org.apache.sysds.runtime.instructions.cp.DeCompressionCPInstruction;
 import org.apache.sysds.runtime.instructions.cp.DnnCPInstruction;
 import org.apache.sysds.runtime.instructions.cp.FunctionCallCPInstruction;
 import org.apache.sysds.runtime.instructions.cp.IndexingCPInstruction;
@@ -153,6 +155,7 @@ public class CPInstructionParser extends InstructionParser
 		String2CPInstructionType.put( "min"  , CPType.Binary);
 		String2CPInstructionType.put( "dropInvalidType"  , CPType.Binary);
 		String2CPInstructionType.put( "dropInvalidLength"  , CPType.Binary);
+		String2CPInstructionType.put( "_map"  , CPType.Binary); // _map represents the operation map
 
 		String2CPInstructionType.put( "nmax", CPType.BuiltinNary);
 		String2CPInstructionType.put( "nmin", CPType.BuiltinNary);
@@ -189,6 +192,7 @@ public class CPInstructionParser extends InstructionParser
 		String2CPInstructionType.put( "sigmoid", CPType.Unary);
 		String2CPInstructionType.put( "typeOf", CPType.Unary);
 		String2CPInstructionType.put( "detectSchema", CPType.Unary);
+		String2CPInstructionType.put( "colnames", CPType.Unary);
 		String2CPInstructionType.put( "isna", CPType.Unary);
 		String2CPInstructionType.put( "isnan", CPType.Unary);
 		String2CPInstructionType.put( "isinf", CPType.Unary);
@@ -270,9 +274,9 @@ public class CPInstructionParser extends InstructionParser
 		String2CPInstructionType.put( "wumm",     CPType.Quaternary);
 		
 		// User-defined function Opcodes
-		String2CPInstructionType.put( "extfunct", CPType.External);
+		String2CPInstructionType.put(FunctionOp.OPCODE, CPType.FCall);
 
-		String2CPInstructionType.put( Append.OPCODE, CPType.Append);
+		String2CPInstructionType.put(Append.OPCODE, CPType.Append);
 		String2CPInstructionType.put( "remove",      CPType.Append);
 		
 		// data generation opcodes
@@ -306,6 +310,7 @@ public class CPInstructionParser extends InstructionParser
 
 		String2CPInstructionType.put( "partition", CPType.Partition);
 		String2CPInstructionType.put( "compress",  CPType.Compression);
+		String2CPInstructionType.put( "decompress", CPType.DeCompression);
 		String2CPInstructionType.put( "spoof",     CPType.SpoofFused);
 		
 		String2CPInstructionType.put( "sql", CPType.Sql);
@@ -379,7 +384,7 @@ public class CPInstructionParser extends InstructionParser
 			case StringInit:
 				return StringInitCPInstruction.parseInstruction(str);
 				
-			case External:
+			case FCall:
 				return FunctionCallCPInstruction.parseInstruction(str);
 
 			case ParameterizedBuiltin:
@@ -391,13 +396,13 @@ public class CPInstructionParser extends InstructionParser
 			case MultiReturnBuiltin:
 				return MultiReturnBuiltinCPInstruction.parseInstruction(str);
 				
-			case QSort: 
+			case QSort:
 				return QuantileSortCPInstruction.parseInstruction(str);
 			
-			case QPick: 
+			case QPick:
 				return QuantilePickCPInstruction.parseInstruction(str);
 			
-			case MatrixIndexing: 
+			case MatrixIndexing:
 				execType = ExecType.valueOf( str.split(Instruction.OPERAND_DELIM)[0] ); 
 				if( execType == ExecType.CP )
 					return IndexingCPInstruction.parseInstruction(str);
@@ -434,8 +439,11 @@ public class CPInstructionParser extends InstructionParser
 				return CovarianceCPInstruction.parseInstruction(str);
 
 			case Compression:
-				return (CPInstruction) CompressionCPInstruction.parseInstruction(str);
+				return CompressionCPInstruction.parseInstruction(str);
 			
+			case DeCompression:
+				return DeCompressionCPInstruction.parseInstruction(str);
+				
 			case SpoofFused:
 				return SpoofCPInstruction.parseInstruction(str);
 				

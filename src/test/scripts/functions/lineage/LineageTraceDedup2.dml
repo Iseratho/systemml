@@ -19,10 +19,10 @@
 #
 #-------------------------------------------------------------
 
-X = read($1);
+X = rand(rows=10, cols=5, seed=42);
 
 R = X;
-for(i in 1:2){ #10
+for(i in 1:5){ #10
   if(i %% 2 == 1)
     R = R + 1 / 2;
   else
@@ -38,4 +38,8 @@ for(i in 1:2){ #10
 
 R = R * 3;
 
-write(R, $2, format="text");
+for (j in 1:2) {
+  R = R * 4;
+}
+
+write(R, $1, format="text");

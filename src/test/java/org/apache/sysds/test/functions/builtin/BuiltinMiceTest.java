@@ -21,8 +21,10 @@ package org.apache.sysds.test.functions.builtin;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.sysds.common.Types;
 import org.apache.sysds.lops.LopProperties;
+import org.apache.sysds.runtime.lineage.LineageCacheConfig.ReuseCacheType;
 import org.apache.sysds.runtime.matrix.data.MatrixValue;
 import org.apache.sysds.test.AutomatedTestBase;
 import org.apache.sysds.test.TestConfiguration;
@@ -36,9 +38,8 @@ public class BuiltinMiceTest extends AutomatedTestBase {
 	private static final String TEST_CLASS_DIR = TEST_DIR + BuiltinMiceTest.class.getSimpleName() + "/";
 
 	private final static String DATASET = SCRIPT_DIR +"functions/transform/input/ChickWeight.csv";
-	private final static double eps = 0.2;
+	private final static double eps = 0.16;
 	private final static int iter = 3;
-	private final static int com = 2;
 
 	@Override
 	public void setUp() {
@@ -47,43 +48,58 @@ public class BuiltinMiceTest extends AutomatedTestBase {
 	@Test
 	public void testMiceMixCP() {
 		double[][] mask = {{ 0.0, 0.0, 1.0, 1.0, 0.0}};
-		runMiceNominalTest(mask, 1, LopProperties.ExecType.CP);
+		runMiceNominalTest(mask, 1, false, LopProperties.ExecType.CP);
 	}
 
 	@Test
 	public void testMiceNumberCP() {
 		double[][] mask = {{ 0.0, 0.0, 0.0, 0.0, 0.0}};
-		runMiceNominalTest(mask, 2, LopProperties.ExecType.CP);
+		runMiceNominalTest(mask, 2, false, LopProperties.ExecType.CP);
 	}
 
 	@Test
 	public void testMiceCategoricalCP() {
 		double[][] mask = {{ 1.0, 1.0, 1.0, 1.0, 1.0}};
-		runMiceNominalTest(mask, 3, LopProperties.ExecType.CP);
+		runMiceNominalTest(mask, 3, false, LopProperties.ExecType.CP);
 	}
-	//	@Test
-	//	public void testMiceSpark() {
-	//		runMiceNominalTest( LopProperties.ExecType.SPARK);
-	//	}
 
-	private void runMiceNominalTest(double[][] mask, int testType, LopProperties.ExecType instType) {
+	@Test
+	public void testMiceMixLineageReuseCP() {
+		double[][] mask = {{ 0.0, 0.0, 1.0, 1.0, 0.0}};
+		runMiceNominalTest(mask, 1, true, LopProperties.ExecType.CP);
+	}
+
+	//added a single, relatively-fast spark test, others seem infeasible
+	//as forcing every operation to spark takes too long for complex,
+	//composite builtins like mice.
+
+	@Test
+	public void testMiceNumberSpark() {
+		double[][] mask = {{ 0.0, 0.0, 0.0, 0.0, 0.0}};
+		runMiceNominalTest(mask, 2, false, LopProperties.ExecType.SPARK);
+	}
+	
+	private void runMiceNominalTest(double[][] mask, int testType, boolean lineage, LopProperties.ExecType instType) {
 		Types.ExecMode platformOld = setExecMode(instType);
 		try {
 			loadTestConfiguration(getTestConfiguration(TEST_NAME));
 			String HOME = SCRIPT_DIR + TEST_DIR;
 			fullDMLScriptName = HOME + TEST_NAME + ".dml";
-			programArgs = new String[]{"-nvargs", "X=" + DATASET, "Mask="+input("M"), "iteration=" + iter,  "com=" + com, "dataN=" + output("N"), "dataC=" + output("C")};
+			programArgs = new String[]{"-nvargs", "X=" + DATASET, "Mask="+input("M"), 
+				"iteration=" + iter, "dataN=" + output("N"), "dataC=" + output("C")};
+			if (lineage) {
+				programArgs = (String[]) ArrayUtils.addAll(programArgs, new String[] {
+					"-stats","-lineage", ReuseCacheType.REUSE_HYBRID.name().toLowerCase()});
+			}
 			writeInputMatrixWithMTD("M", mask, true);
 
 			fullRScriptName = HOME + TEST_NAME + ".R";
-			rCmd = "Rscript" + " " + fullRScriptName + " " +DATASET+ " " +inputDir() + " "  + expectedDir();
+			rCmd = getRCmd(DATASET, inputDir(), expectedDir());
 
 			runTest(true, false, null, -1);
 			runRScript(true);
 
-
-			switch (testType)
-			{
+			switch (testType) {
 				case 1:
 					testCategoricalOutput();
 					testNumericOutput();
@@ -101,18 +117,16 @@ public class BuiltinMiceTest extends AutomatedTestBase {
 		}
 	}
 
-	private void testNumericOutput()
-	{
+	private void testNumericOutput() {
 		//compare matrices
 		HashMap<MatrixValue.CellIndex, Double> dmlfileN = readDMLMatrixFromHDFS("N");
 		HashMap<MatrixValue.CellIndex, Double> rfileN  = readRMatrixFromFS("N");
 
 		// compare numerical imputations
 		TestUtils.compareMatrices(dmlfileN, rfileN, eps, "Stat-DML", "Stat-R");
-
 	}
-	private void testCategoricalOutput()
-	{
+
+	private void testCategoricalOutput() {
 		HashMap<MatrixValue.CellIndex, Double> dmlfileC = readDMLMatrixFromHDFS("C");
 		HashMap<MatrixValue.CellIndex, Double> rfileC  = readRMatrixFromFS("C");
 
@@ -128,6 +142,6 @@ public class BuiltinMiceTest extends AutomatedTestBase {
 		if(countTrue / (double)dmlfileC.size() > 0.98)
 			Assert.assertTrue(true);
 		else
-			Assert.fail();
+			Assert.fail("categorical test fails, the true value count is less than 98%");
 	}
 }

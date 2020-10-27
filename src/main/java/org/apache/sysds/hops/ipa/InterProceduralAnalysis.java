@@ -21,8 +21,6 @@ package org.apache.sysds.hops.ipa;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
 import org.apache.sysds.common.Types.DataType;
 import org.apache.sysds.common.Types.ValueType;
 import org.apache.sysds.conf.ConfigurationManager;
@@ -76,7 +74,6 @@ import java.util.Set;
  */
 public class InterProceduralAnalysis 
 {
-	private static final boolean LDEBUG = false; //internal local debug level
 	private static final Log LOG = LogFactory.getLog(InterProceduralAnalysis.class.getName());
 
 	//internal configuration parameters
@@ -96,19 +93,11 @@ public class InterProceduralAnalysis
 	protected static final boolean FORWARD_SIMPLE_FUN_CALLS       = true; //replace a call to a simple forwarding function with the function itself
 	protected static final boolean FLAG_NONDETERMINISM            = true; //flag functions which directly or transitively contain non-deterministic calls
 	
-	static {
-		// for internal debugging only
-		if( LDEBUG ) {
-			Logger.getLogger("org.apache.sysds.hops.ipa")
-				.setLevel(Level.DEBUG);
-		}
-	}
-	
 	private final DMLProgram _prog;
 	private final StatementBlock _sb;
 	
 	//function call graph for functions reachable from main
-	private final FunctionCallGraph _fgraph;
+	private FunctionCallGraph _fgraph;
 	
 	//set IPA passes to apply in order 
 	private final ArrayList<IPAPass> _passes;
@@ -185,6 +174,10 @@ public class InterProceduralAnalysis
 			if( LOG.isDebugEnabled() )
 				LOG.debug("IPA: Initial FunctionCallSummary: \n" + fcallSizes);
 			
+			//step 0: retain original unoptimized functions for eval()
+			if( _fgraph.containsSecondOrderCall() && i==0 ) //on first call
+				_prog.copyOriginalFunctions();
+			
 			//step 1: intra- and inter-procedural 
 			if( INTRA_PROCEDURAL_ANALYSIS ) {
 				//get unary dimension-preserving non-candidate functions
@@ -207,9 +200,10 @@ public class InterProceduralAnalysis
 			}
 			
 			//step 2: apply additional IPA passes
+			boolean rebuildFGraph = false;
 			for( IPAPass pass : _passes )
 				if( pass.isApplicable(_fgraph) )
-					pass.rewriteProgram(_prog, _fgraph, fcallSizes);
+					rebuildFGraph |= pass.rewriteProgram(_prog, _fgraph, fcallSizes);
 			
 			//early abort without functions or on reached fixpoint
 			if( _fgraph.getReachableFunctions().isEmpty() 
@@ -219,6 +213,10 @@ public class InterProceduralAnalysis
 						+ " repetitions due to reached fixpoint.");
 				break;
 			}
+			
+			//step 3: rebuild function call graph if necessary
+			if( rebuildFGraph && i < repetitions-1 )
+				_fgraph = new FunctionCallGraph(_prog);
 		}
 		
 		//cleanup pass: remove unused functions

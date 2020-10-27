@@ -61,6 +61,7 @@ import org.apache.sysds.runtime.matrix.data.MatrixBlock;
 import org.apache.sysds.runtime.matrix.data.MatrixIndexes;
 import org.apache.sysds.runtime.meta.MatrixCharacteristics;
 import org.apache.sysds.runtime.util.HDFSTool;
+import org.apache.sysds.runtime.util.CollectionUtils;
 import org.apache.sysds.runtime.util.UtilFunctions;
 import org.apache.sysds.test.AutomatedTestBase;
 import org.apache.sysds.test.TestConfiguration;
@@ -83,11 +84,11 @@ public class FrameConverterTest extends AutomatedTestBase
 	private final static List<ValueType> schemaMixedLargeListInt  = Collections.nCopies(200, ValueType.INT64);
 	private final static List<ValueType> schemaMixedLargeListBool  = Collections.nCopies(200, ValueType.BOOLEAN);
 	
-	private static final List<ValueType> schemaMixedLargeList = UtilFunctions.asList(
+	private static final List<ValueType> schemaMixedLargeList = CollectionUtils.asList(
 		schemaMixedLargeListStr, schemaMixedLargeListDble, schemaMixedLargeListInt, schemaMixedLargeListBool);
 	private static final ValueType[] schemaMixedLarge = schemaMixedLargeList.toArray(new ValueType[0]);
 	
-	private static final List<ValueType> schemaMixedLargeListDFrame = UtilFunctions.asList(
+	private static final List<ValueType> schemaMixedLargeListDFrame = CollectionUtils.asList(
 		schemaMixedLargeListStr.subList(0, 100), schemaMixedLargeListDble.subList(0, 100),
 		schemaMixedLargeListInt.subList(0, 100), schemaMixedLargeListBool.subList(0, 100));
 	private static final ValueType[] schemaMixedLargeDFrame = schemaMixedLargeListDFrame.toArray(new ValueType[0]);
@@ -407,7 +408,7 @@ public class FrameConverterTest extends AutomatedTestBase
 				JavaPairRDD<LongWritable,Text> rddIn = (JavaPairRDD<LongWritable,Text>) sc
 					.hadoopFile(fnameIn, iinfo.inputFormatClass, iinfo.keyClass, iinfo.valueClass);
 				JavaPairRDD<LongWritable, FrameBlock> rddOut = FrameRDDConverterUtils
-						.csvToBinaryBlock(sc, rddIn, mc, null, false, separator, false, 0)
+						.csvToBinaryBlock(sc, rddIn, mc, null, false, separator, false, 0, UtilFunctions.defaultNaString)
 						.mapToPair(new LongFrameToLongWritableFrameFunction());
 				rddOut.saveAsHadoopFile(fnameOut, LongWritable.class, FrameBlock.class, oinfo.outputFormatClass);
 				break;

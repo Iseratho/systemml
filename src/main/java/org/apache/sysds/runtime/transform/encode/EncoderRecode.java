@@ -19,11 +19,15 @@
 
 package org.apache.sysds.runtime.transform.encode;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.sysds.runtime.util.IndexRange;
 import org.apache.wink.json4j.JSONException;
 import org.apache.wink.json4j.JSONObject;
 import org.apache.sysds.lops.Lop;
@@ -40,11 +44,24 @@ public class EncoderRecode extends Encoder
 	private HashMap<Integer, HashMap<String, Long>> _rcdMaps  = new HashMap<>();
 	private HashMap<Integer, HashSet<Object>> _rcdMapsPart = null;
 	
-	public EncoderRecode(JSONObject parsedSpec, String[] colnames, int clen)
+	public EncoderRecode(JSONObject parsedSpec, String[] colnames, int clen, int minCol, int maxCol)
 		throws JSONException 
 	{
 		super(null, clen);
-		_colList = TfMetaUtils.parseJsonIDList(parsedSpec, colnames, TfMethod.RECODE.toString());
+		_colList = TfMetaUtils.parseJsonIDList(parsedSpec, colnames, TfMethod.RECODE.toString(), minCol, maxCol);
+	}
+	
+	private EncoderRecode(int[] colList, int clen) {
+		super(colList, clen);
+	}
+	
+	public EncoderRecode() {
+		this(new int[0], 0);
+	}
+	
+	private EncoderRecode(int[] colList, int clen, HashMap<Integer, HashMap<String, Long>> rcdMaps) {
+		super(colList, clen);
+		_rcdMaps = rcdMaps;
 	}
 	
 	public HashMap<Integer, HashMap<String,Long>> getCPRecodeMaps() { 
@@ -104,14 +121,16 @@ public class EncoderRecode extends Encoder
 	protected void putCode(HashMap<String,Long> map, String key) {
 		map.put(key, Long.valueOf(map.size()+1));
 	}
+	
+	public void prepareBuildPartial() {
+		//ensure allocated partial recode map
+		if( _rcdMapsPart == null )
+			_rcdMapsPart = new HashMap<>();
+	}
 
 	public void buildPartial(FrameBlock in) {
 		if( !isApplicable() )
 			return;
-
-		//ensure allocated partial recode map
-		if( _rcdMapsPart == null )
-			_rcdMapsPart = new HashMap<>();
 		
 		//construct partial recode map (tokens w/o codes)
 		//iterate over columns for sequential access
@@ -145,6 +164,67 @@ public class EncoderRecode extends Encoder
 		}
 		
 		return out;
+	}
+
+	@Override
+	public Encoder subRangeEncoder(IndexRange ixRange) {
+		List<Integer> cols = new ArrayList<>();
+		HashMap<Integer, HashMap<String, Long>> rcdMaps = new HashMap<>();
+		for(int col : _colList) {
+			if(ixRange.inColRange(col)) {
+				// add the correct column, removed columns before start
+				// colStart - 1 because colStart is 1-based
+				int corrColumn = (int) (col - (ixRange.colStart - 1));
+				cols.add(corrColumn);
+				// copy rcdMap for column
+				rcdMaps.put(corrColumn, new HashMap<>(_rcdMaps.get(col)));
+			}
+		}
+		if(cols.isEmpty())
+			// empty encoder -> sub range encoder does not exist
+			return null;
+
+		int[] colList = cols.stream().mapToInt(i -> i).toArray();
+		return new EncoderRecode(colList, (int) ixRange.colSpan(), rcdMaps);
+	}
+
+	@Override
+	public void mergeAt(Encoder other, int row, int col) {
+		if(other instanceof EncoderRecode) {
+			mergeColumnInfo(other, col);
+			
+			// merge together overlapping columns or add new columns
+			EncoderRecode otherRec = (EncoderRecode) other;
+			for (int otherColID : other._colList) {
+				int colID = otherColID + col - 1;
+				//allocate column map if necessary
+				if( !_rcdMaps.containsKey(colID) )
+					_rcdMaps.put(colID, new HashMap<>());
+				
+				HashMap<String, Long> otherMap = otherRec._rcdMaps.get(otherColID);
+				if(otherMap != null) {
+					// for each column, add all non present recode values
+					for(Map.Entry<String, Long> entry : otherMap.entrySet()) {
+						if (lookupRCDMap(colID, entry.getKey()) == -1) {
+							// key does not yet exist
+							putCode(_rcdMaps.get(colID), entry.getKey());
+						}
+					}
+				}
+			}
+			return;
+		}
+		super.mergeAt(other, row, col);
+	}
+	
+	public int[] numDistinctValues() {
+		int[] numDistinct = new int[_colList.length];
+		
+		for( int j=0; j<_colList.length; j++ ) {
+			int colID = _colList[j]; //1-based
+			numDistinct[j] = _rcdMaps.get(colID).size();
+		}
+		return numDistinct;
 	}
 
 	@Override
